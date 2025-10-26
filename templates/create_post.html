@@ -1,0 +1,383 @@
+{% extends "layout.html" %}
+
+{% block title %}Create Post - Nexus{% endblock %}
+
+{% block extra_css %}
+<style>
+    .create-post-container {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    .post-editor {
+        background: white;
+        border-radius: 20px;
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+    .editor-toolbar {
+        border-bottom: 1px solid var(--gray-200);
+        padding: 20px;
+    }
+    .editor-content {
+        padding: 20px;
+    }
+    .post-textarea {
+        border: none;
+        resize: none;
+        font-size: 1.1rem;
+        line-height: 1.6;
+        min-height: 200px;
+        padding: 0;
+    }
+    .post-textarea:focus {
+        outline: none;
+        box-shadow: none;
+    }
+    .editor-actions {
+        border-top: 1px solid var(--gray-200);
+        padding: 20px;
+    }
+    .action-btn {
+        border: none;
+        background: none;
+        padding: 10px 15px;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        color: var(--gray-600);
+    }
+    .action-btn:hover {
+        background: var(--gray-100);
+        color: var(--primary);
+    }
+    .action-btn.active {
+        background: var(--primary);
+        color: white;
+    }
+    .preview-image {
+        border-radius: 15px;
+        overflow: hidden;
+        margin-top: 20px;
+        position: relative;
+    }
+    .preview-image img {
+        width: 100%;
+        max-height: 400px;
+        object-fit: cover;
+    }
+    .remove-image {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .audience-selector {
+        background: var(--gray-100);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .emoji-picker {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        background: white;
+        border-radius: 15px;
+        box-shadow: var(--shadow-lg);
+        padding: 15px;
+        z-index: 1000;
+        display: none;
+    }
+    .emoji-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 5px;
+    }
+    .emoji {
+        padding: 5px;
+        border-radius: 5px;
+        cursor: pointer;
+        text-align: center;
+    }
+    .emoji:hover {
+        background: var(--gray-100);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="create-post-container">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="fw-bold">Create Post</h1>
+                <p class="text-muted">Share what's on your mind with the world</p>
+            </div>
+            <a href="{{ url_for('feed') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Feed
+            </a>
+        </div>
+
+        <!-- Post Editor -->
+        <div class="post-editor">
+            <!-- User Info -->
+            <div class="editor-toolbar">
+                <div class="d-flex align-items-center">
+                    <div class="user-avatar user-avatar-sm me-3">
+                        {% if user %}{{ user.username[0].upper() }}{% else %}U{% endif %}
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-0">{% if user %}{{ user.username }}{% else %}User{% endif %}</h6>
+                        <div class="audience-selector">
+                            <select class="form-select form-select-sm border-0 bg-transparent" style="width: auto;">
+                                <option value="public">🌍 Public</option>
+                                <option value="friends">👥 Friends</option>
+                                <option value="private">🔒 Only me</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post Content -->
+            <div class="editor-content">
+                <textarea class="post-textarea w-100" placeholder="What's on your mind?" 
+                         id="postContent" autofocus></textarea>
+
+                <!-- Image Preview -->
+                <div class="preview-image" id="imagePreview" style="display: none;">
+                    <img id="previewImage" src="" alt="Preview">
+                    <button type="button" class="remove-image" onclick="removeImage()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Emoji Picker -->
+                <div class="emoji-picker" id="emojiPicker">
+                    <div class="emoji-grid">
+                        {% for emoji in ['😀', '😂', '🥰', '😎', '🤩', '😍', '👍', '❤️', '🔥', '🎉', '💯', '✨', '🙏', '😊', '🥳', '😜'] %}
+                        <span class="emoji" onclick="insertEmoji('{{ emoji }}')">{{ emoji }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Editor Actions -->
+            <div class="editor-actions">
+                <!-- Action Buttons -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex gap-2">
+                        <button class="action-btn" onclick="toggleEmojiPicker()" type="button">
+                            <i class="fas fa-smile"></i>
+                        </button>
+                        <button class="action-btn" onclick="triggerImageUpload()" type="button">
+                            <i class="fas fa-image"></i>
+                        </button>
+                        <button class="action-btn" type="button">
+                            <i class="fas fa-video"></i>
+                        </button>
+                        <button class="action-btn" type="button">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </button>
+                        <button class="action-btn" type="button">
+                            <i class="fas fa-user-tag"></i>
+                        </button>
+                    </div>
+                    <div class="text-muted small">
+                        <span id="charCount">0</span>/5000
+                    </div>
+                </div>
+
+                <!-- Post Button -->
+                <div class="d-grid">
+                    <button class="btn btn-primary-modern btn-modern" id="postButton" disabled>
+                        <i class="fas fa-paper-plane me-2"></i>Post
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Posting Tips -->
+        <div class="card-modern p-4 mt-4">
+            <h6 class="fw-bold mb-3">
+                <i class="fas fa-lightbulb text-warning me-2"></i>Posting Tips
+            </h6>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-camera text-primary mt-1 me-3"></i>
+                        <div>
+                            <small class="fw-semibold">Add Visuals</small>
+                            <p class="text-muted small mb-0">Posts with images get 2x more engagement</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-hashtag text-info mt-1 me-3"></i>
+                        <div>
+                            <small class="fw-semibold">Use Hashtags</small>
+                            <p class="text-muted small mb-0">Reach more people with relevant hashtags</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-clock text-success mt-1 me-3"></i>
+                        <div>
+                            <small class="fw-semibold">Best Times</small>
+                            <p class="text-muted small mb-0">Post during peak hours for more visibility</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-users text-warning mt-1 me-3"></i>
+                        <div>
+                            <small class="fw-semibold">Engage</small>
+                            <p class="text-muted small mb-0">Respond to comments to build community</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden File Input -->
+<form id="postForm" action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data" style="display: none;">
+    <input type="hidden" name="content" id="formContent">
+    <input type="file" name="image" id="imageInput" accept="image/*">
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const postContent = document.getElementById('postContent');
+    const charCount = document.getElementById('charCount');
+    const postButton = document.getElementById('postButton');
+    const imageInput = document.getElementById('imageInput');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewImage = document.getElementById('previewImage');
+    const emojiPicker = document.getElementById('emojiPicker');
+
+    // Character count and validation
+    postContent.addEventListener('input', function() {
+        const content = this.value;
+        const count = content.length;
+        
+        charCount.textContent = count;
+        
+        // Enable/disable post button
+        if (count > 0 || imageInput.files.length > 0) {
+            postButton.disabled = false;
+        } else {
+            postButton.disabled = true;
+        }
+        
+        // Update character count color
+        if (count > 4500) {
+            charCount.classList.add('text-danger');
+        } else {
+            charCount.classList.remove('text-danger');
+        }
+    });
+
+    // Image upload handling
+    function triggerImageUpload() {
+        imageInput.click();
+    }
+
+    imageInput.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                imagePreview.style.display = 'block';
+            }
+            
+            reader.readAsDataURL(this.files[0]);
+            postButton.disabled = false;
+        }
+    });
+
+    function removeImage() {
+        imagePreview.style.display = 'none';
+        previewImage.src = '';
+        imageInput.value = '';
+        
+        // Disable post button if no content
+        if (postContent.value.length === 0) {
+            postButton.disabled = true;
+        }
+    }
+
+    // Emoji picker
+    function toggleEmojiPicker() {
+        if (emojiPicker.style.display === 'block') {
+            emojiPicker.style.display = 'none';
+        } else {
+            emojiPicker.style.display = 'block';
+        }
+    }
+
+    function insertEmoji(emoji) {
+        const cursorPos = postContent.selectionStart;
+        const content = postContent.value;
+        const newContent = content.substring(0, cursorPos) + emoji + content.substring(cursorPos);
+        
+        postContent.value = newContent;
+        postContent.focus();
+        postContent.setSelectionRange(cursorPos + emoji.length, cursorPos + emoji.length);
+        
+        // Trigger input event to update character count
+        postContent.dispatchEvent(new Event('input'));
+        
+        emojiPicker.style.display = 'none';
+    }
+
+    // Close emoji picker when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!emojiPicker.contains(e.target) && e.target.className !== 'action-btn') {
+            emojiPicker.style.display = 'none';
+        }
+    });
+
+    // Post submission
+    postButton.addEventListener('click', function() {
+        const form = document.getElementById('postForm');
+        const formContent = document.getElementById('formContent');
+        
+        formContent.value = postContent.value;
+        form.submit();
+    });
+
+    // Auto-resize textarea
+    postContent.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Add some sample text on focus for demo
+    postContent.addEventListener('focus', function() {
+        if (this.value === '') {
+            this.placeholder = '';
+        }
+    });
+
+    postContent.addEventListener('blur', function() {
+        if (this.value === '') {
+            this.placeholder = "What's on your mind?";
+        }
+    });
+</script>
+{% endblock %}

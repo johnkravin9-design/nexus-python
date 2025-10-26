@@ -1,0 +1,290 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard - Nexus{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Left Sidebar -->
+        <div class="col-lg-3 col-md-4 mb-4">
+            <!-- User Profile Card -->
+            <div class="card-modern p-4 mb-4">
+                <div class="text-center">
+                    <div class="user-avatar user-avatar-lg mx-auto mb-3">
+                        {{ user.username[0].upper() }}
+                    </div>
+                    <h5 class="fw-bold mb-1">{{ user.username }}</h5>
+                    <p class="text-muted small mb-3">@{{ user.username }}</p>
+                    <div class="d-flex justify-content-around text-center">
+                        <div>
+                            <div class="fw-bold text-primary">{{ user.posts|length if user.posts }}</div>
+                            <div class="text-muted small">Posts</div>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-primary">1.2K</div>
+                            <div class="text-muted small">Followers</div>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-primary">856</div>
+                            <div class="text-muted small">Following</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card-modern p-3">
+                <h6 class="fw-bold mb-3">Quick Actions</h6>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('create_post') }}" class="btn btn-primary-modern btn-modern">
+                        <i class="fas fa-edit me-2"></i>Create Post
+                    </a>
+                    <a href="{{ url_for('discover') }}" class="btn btn-outline-primary btn-modern">
+                        <i class="fas fa-compass me-2"></i>Discover
+                    </a>
+                    <a href="{{ url_for('messages') }}" class="btn btn-outline-primary btn-modern">
+                        <i class="fas fa-comments me-2"></i>Messages
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-lg-6 col-md-8 mb-4">
+            <!-- Create Post Card -->
+            <div class="card-modern p-4 mb-4">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="user-avatar user-avatar-sm me-3">
+                        {{ user.username[0].upper() }}
+                    </div>
+                    <input type="text" class="form-control" placeholder="What's on your mind, {{ user.username }}?" 
+                           onclick="window.location.href='{{ url_for('create_post') }}'">
+                </div>
+                <div class="d-flex justify-content-around border-top pt-3">
+                    <button class="btn btn-light btn-sm">
+                        <i class="fas fa-image text-success me-1"></i>Photo
+                    </button>
+                    <button class="btn btn-light btn-sm">
+                        <i class="fas fa-video text-danger me-1"></i>Video
+                    </button>
+                    <button class="btn btn-light btn-sm">
+                        <i class="fas fa-map-marker-alt text-info me-1"></i>Location
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stories -->
+            <div class="card-modern p-3 mb-4">
+                <div class="d-flex overflow-auto pb-2">
+                    {% for i in range(8) %}
+                    <div class="text-center me-3">
+                        <div class="position-relative">
+                            <div class="user-avatar user-avatar-lg mx-auto mb-1" 
+                                 style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);">
+                                <i class="fas fa-plus text-white"></i>
+                            </div>
+                        </div>
+                        <small class="text-muted">Add Story</small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Posts Feed -->
+            {% for post in posts %}
+            <div class="card-modern p-4 mb-4 animate-fadeIn">
+                <!-- Post Header -->
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar user-avatar-sm me-3">
+                            {{ post.user.username[0].upper() if post.user else 'U' }}
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-0">{{ post.user.username if post.user else 'Unknown User' }}</h6>
+                            <small class="text-muted">{{ post.created_at.strftime('%b %d, %Y at %I:%M %p') }}</small>
+                        </div>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-link text-muted" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-bookmark me-2"></i>Save Post</a></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-share me-2"></i>Share</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="#"><i class="fas fa-flag me-2"></i>Report</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Post Content -->
+                <p class="mb-3">{{ post.content }}</p>
+
+                {% if post.image_url %}
+                <div class="post-image mb-3">
+                    <img src="{{ url_for('static', filename=post.image_url) }}" 
+                         class="img-fluid rounded-3 w-100" 
+                         style="max-height: 400px; object-fit: cover;" 
+                         alt="Post image">
+                </div>
+                {% endif %}
+
+                <!-- Post Stats -->
+                <div class="d-flex justify-content-between text-muted small mb-3">
+                    <div>
+                        <i class="fas fa-heart text-danger me-1"></i>
+                        <span>{{ post.likes|length if post.likes else 0 }} likes</span>
+                    </div>
+                    <div>
+                        <span>{{ post.comments|length if post.comments else 0 }} comments</span>
+                    </div>
+                </div>
+
+                <!-- Post Actions -->
+                <div class="border-top border-bottom py-2">
+                    <div class="row text-center">
+                        <div class="col">
+                            <button class="btn btn-light btn-sm w-100 like-btn" data-post-id="{{ post.id }}">
+                                <i class="far fa-heart me-1"></i>Like
+                            </button>
+                        </div>
+                        <div class="col">
+                            <button class="btn btn-light btn-sm w-100">
+                                <i class="far fa-comment me-1"></i>Comment
+                            </button>
+                        </div>
+                        <div class="col">
+                            <button class="btn btn-light btn-sm w-100">
+                                <i class="far fa-share-square me-1"></i>Share
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="card-modern p-5 text-center">
+                <div class="mb-4">
+                    <i class="fas fa-newspaper fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">No posts yet</h4>
+                    <p class="text-muted">Be the first to share something with your friends!</p>
+                </div>
+                <a href="{{ url_for('create_post') }}" class="btn btn-primary-modern btn-modern">
+                    <i class="fas fa-edit me-2"></i>Create Your First Post
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-lg-3 col-md-4">
+            <!-- Trending Topics -->
+            <div class="card-modern p-3 mb-4">
+                <h6 class="fw-bold mb-3">Trending Topics</h6>
+                <div class="d-flex flex-column gap-2">
+                    {% for topic in ['Technology', 'Sports', 'Music', 'Travel', 'Food'] %}
+                    <a href="#" class="text-decoration-none">
+                        <div class="d-flex align-items-center p-2 rounded hover-bg">
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">#{{ topic }}</div>
+                                <small class="text-muted">2.5K posts</small>
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Suggested Friends -->
+            <div class="card-modern p-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0">Suggested Friends</h6>
+                    <a href="{{ url_for('discover') }}" class="text-primary small">See All</a>
+                </div>
+                <div class="d-flex flex-column gap-3">
+                    {% for i in range(3) %}
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <div class="user-avatar user-avatar-sm me-2">
+                                {{ 'ABC'[i] }}
+                            </div>
+                            <div>
+                                <div class="fw-semibold small">User{{ i+1 }}</div>
+                                <small class="text-muted">25 mutual friends</small>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary btn-sm follow-btn" data-user-id="{{ i+10 }}">
+                            <i class="fas fa-user-plus"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Like functionality
+    document.querySelectorAll('.like-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            const postId = this.dataset.postId;
+            const icon = this.querySelector('i');
+            
+            try {
+                const response = await fetch(`/like/${postId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const result = await response.json();
+                
+                if (result.status === 'liked') {
+                    icon.classList.remove('far', 'fa-heart');
+                    icon.classList.add('fas', 'fa-heart', 'text-danger');
+                    this.innerHTML = '<i class="fas fa-heart text-danger me-1"></i>Liked';
+                } else {
+                    icon.classList.remove('fas', 'fa-heart', 'text-danger');
+                    icon.classList.add('far', 'fa-heart');
+                    this.innerHTML = '<i class="far fa-heart me-1"></i>Like';
+                }
+            } catch (error) {
+                console.error('Error liking post:', error);
+            }
+        });
+    });
+
+    // Follow functionality
+    document.querySelectorAll('.follow-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            const userId = this.dataset.userId;
+            
+            try {
+                const response = await fetch(`/follow/${userId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const result = await response.json();
+                
+                if (result.status === 'followed') {
+                    this.innerHTML = '<i class="fas fa-check"></i>';
+                    this.classList.remove('btn-primary');
+                    this.classList.add('btn-success');
+                } else {
+                    this.innerHTML = '<i class="fas fa-user-plus"></i>';
+                    this.classList.remove('btn-success');
+                    this.classList.add('btn-primary');
+                }
+            } catch (error) {
+                console.error('Error following user:', error);
+            }
+        });
+    });
+</script>
+{% endblock %}

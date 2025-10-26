@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="admin-dashboard">
+    <h2>Admin Dashboard</h2>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>{{ stats.total_users }}</h3>
+            <p>Total Users</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_posts }}</h3>
+            <p>Total Posts</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.total_reports }}</h3>
+            <p>Total Reports</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.pending_reports }}</h3>
+            <p>Pending Reports</p>
+        </div>
+    </div>
+
+    <div class="admin-actions">
+        <a href="{{ url_for('admin_users') }}" class="btn btn-primary">Manage Users</a>
+    </div>
+
+    <div class="recent-section">
+        <h3>Recent Reports</h3>
+        {% for report in recent_reports %}
+        <div class="report-item">
+            <p><strong>Reason:</strong> {{ report.reason }}</p>
+            <p><strong>Reporter:</strong> {{ report.reporter.username }}</p>
+            <p><strong>Date:</strong> {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+        </div>
+        {% else %}
+        <p>No pending reports</p>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+}
+
+.stat-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.stat-card h3 {
+    font-size: 2rem;
+    margin: 0;
+    color: #007bff;
+}
+
+.report-item {
+    background: white;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.admin-actions {
+    margin: 2rem 0;
+}
+</style>
+{% endblock %}

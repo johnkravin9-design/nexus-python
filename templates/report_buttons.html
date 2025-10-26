@@ -1,0 +1,119 @@
+<!-- Add this to your post template -->
+<div class="post-actions">
+    <!-- Like button -->
+    <button class="like-btn" data-post-id="{{ post.id }}">
+        {% if post in current_user.liked_posts %}❤️{% else %}🤍{% endif %} Like
+    </button>
+    
+    <!-- Report button -->
+    <button class="report-btn" data-post-id="{{ post.id }}" data-type="post">
+        🚩 Report
+    </button>
+</div>
+
+<!-- Add this to your comment template -->
+<div class="comment-actions">
+    <button class="report-btn" data-comment-id="{{ comment.id }}" data-type="comment">
+        🚩 Report
+    </button>
+</div>
+
+<!-- Report Modal -->
+<div id="reportModal" class="modal">
+    <div class="modal-content">
+        <h3>Report Content</h3>
+        <form id="reportForm">
+            <input type="hidden" id="reportType" name="report_type">
+            <input type="hidden" id="reportId" name="report_id">
+            
+            <textarea name="reason" placeholder="Please explain why you're reporting this content..." required></textarea>
+            
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeReportModal()">Cancel</button>
+                <button type="submit" class="btn btn-danger">Submit Report</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Report functionality
+document.querySelectorAll('.report-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const type = this.getAttribute('data-type');
+        const id = this.getAttribute(`data-${type}-id`);
+        
+        document.getElementById('reportType').value = type;
+        document.getElementById('reportId').value = id;
+        document.getElementById('reportModal').style.display = 'block';
+    });
+});
+
+function closeReportModal() {
+    document.getElementById('reportModal').style.display = 'none';
+}
+
+document.getElementById('reportForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const type = formData.get('report_type');
+    const id = formData.get('report_id');
+    
+    fetch('/report', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Report submitted successfully');
+            closeReportModal();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    });
+});
+
+// Close modal when clicking outside
+window.addEventListener('click', function(e) {
+    const modal = document.getElementById('reportModal');
+    if (e.target === modal) {
+        closeReportModal();
+    }
+});
+</script>
+
+<style>
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 15% auto;
+    padding: 2rem;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+</style>

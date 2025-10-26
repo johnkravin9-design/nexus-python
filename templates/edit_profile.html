@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Profile - Nexus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-indigo-400">🌐 Nexus</h1>
+                    <div class="ml-8 flex space-x-4">
+                        <a href="/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md">Dashboard</a>
+                        <a href="/feed" class="text-gray-300 hover:text-white px-3 py-2 rounded-md">Feed</a>
+                        <a href="/profile" class="text-gray-300 hover:text-white px-3 py-2 rounded-md">Profile</a>
+                        <a href="/messages" class="text-gray-300 hover:text-white px-3 py-2 rounded-md">Messages</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-300">Editing: {{ user.username }}</span>
+                    <a href="/logout" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto mt-8 p-6">
+        <!-- Profile Picture Upload -->
+        <div class="bg-gray-800 rounded-2xl p-8 border border-gray-700 mb-6">
+            <h2 class="text-2xl font-bold mb-6">Profile Picture</h2>
+            
+            <div class="flex flex-col md:flex-row items-center space-y-6 md:space-y-0 md:space-x-8">
+                <!-- Current Profile Picture -->
+                <div class="text-center">
+                    <div id="currentAvatar" class="w-32 h-32 bg-indigo-600 rounded-full flex items-center justify-center text-white text-4xl font-bold mx-auto mb-4 overflow-hidden">
+                        {% if user.profile_picture and user.profile_picture != 'default.png' %}
+                        <img src="{{ user.get_profile_picture_url() }}" alt="Profile" class="w-full h-full object-cover rounded-full" id="profileImage">
+                        {% else %}
+                        <span id="profileInitial">{{ user.username[0].upper() }}</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-gray-400 text-sm">Current Profile Picture</p>
+                </div>
+
+                <!-- Upload Form -->
+                <div class="flex-1">
+                    <form id="profilePictureForm" enctype="multipart/form-data" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Upload New Profile Picture
+                            </label>
+                            <input
+                                type="file"
+                                id="profilePictureInput"
+                                name="profile_picture"
+                                accept="image/*"
+                                class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 transition-colors"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">
+                                Supported formats: JPG, PNG, GIF, WebP. Max size: 16MB
+                            </p>
+                        </div>
+
+                        <div class="flex space-x-4">
+                            <button
+                                type="submit"
+                                id="uploadProfileBtn"
+                                class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors flex items-center"
+                            >
+                                <i class="fas fa-upload mr-2"></i>
+                                <span id="uploadBtnText">Upload Picture</span>
+                                <div id="uploadSpinner" class="hidden animate-spin rounded-full h-4 w-4 border-t-2 border-white ml-2"></div>
+                            </button>
+                            
+                            {% if user.profile_picture and user.profile_picture != 'default.png' %}
+                            <button
+                                type="button"
+                                id="removeProfileBtn"
+                                class="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                            >
+                                <i class="fas fa-trash mr-2"></i>Remove
+                            </button>
+                            {% endif %}
+                        </div>
+                    </form>
+
+                    <div id="uploadMessage" class="mt-4 hidden">
+                        <!-- Messages will appear here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Information Form -->
+        <div class="bg-gray-800 rounded-2xl p-8 border border-gray-700">
+            <h2 class="text-2xl font-bold mb-6">Profile Information</h2>
+
+            <form method="POST" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="full_name" class="block text-sm font-medium text-gray-300 mb-2">
+                            Full Name
+                        </label>
+                        <input
+                            type="text"
+                            id="full_name"
+                            name="full_name"
+                            value="{{ user.full_name or '' }}"
+                            placeholder="Your display name"
+                            class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-300 mb-2">
+                            Username
+                        </label>
+                        <input
+                            type="text"
+                            id="username"
+                            value="{{ user.username }}"
+                            class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-gray-400"
+                            disabled
+                        >
+                        <p class="text-xs text-gray-500 mt-1">Username cannot be changed</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="bio" class="block text-sm font-medium text-gray-300 mb-2">
+                        Bio
+                    </label>
+                    <textarea
+                        id="bio"
+                        name="bio"
+                        rows="4"
+                        placeholder="Tell the world about yourself..."
+                        class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                    >{{ user.bio or '' }}</textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="location" class="block text-sm font-medium text-gray-300 mb-2">
+                            <i class="fas fa-map-marker-alt mr-2"></i>Location
+                        </label>
+                        <input
+                            type="text"
+                            id="location"
+                            name="location"
+                            value="{{ user.location or '' }}"
+                            placeholder="Where are you from?"
+                            class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="website" class="block text-sm font-medium text-gray-300 mb-2">
+                            <i class="fas fa-link mr-2"></i>Website
+                        </label>
+                        <input
+                            type="url"
+                            id="website"
+                            name="website"
+                            value="{{ user.website or '' }}"
+                            placeholder="https://yourwebsite.com"
+                            class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                        >
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex space-x-4 pt-6 border-t border-gray-700">
+                    <button
+                        type="submit"
+                        class="flex-1 bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                    >
+                        <i class="fas fa-save mr-2"></i>Save Changes
+                    </button>
+                    <a
+                        href="/profile"
+                        class="flex-1 bg-gray-700 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors text-center"
+                    >
+                        <i class="fas fa-times mr-2"></i>Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    // Profile picture upload functionality
+    document.getElementById('profilePictureForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('profilePictureInput');
+        const uploadBtn = document.getElementById('uploadProfileBtn');
+        const btnText = document.getElementById('uploadBtnText');
+        const spinner = document.getElementById('uploadSpinner');
+        const messageDiv = document.getElementById('uploadMessage');
+        
+        if (!fileInput.files[0]) {
+            showMessage('Please select a file to upload.', 'error');
+            return;
+        }
+        
+        // Validate file size (16MB)
+        if (fileInput.files[0].size > 16 * 1024 * 1024) {
+            showMessage('File size must be less than 16MB.', 'error');
+            return;
+        }
+        
+        // Show loading state
+        uploadBtn.disabled = true;
+        btnText.textContent = 'Uploading...';
+        spinner.classList.remove('hidden');
+        messageDiv.classList.add('hidden');
+        
+        const formData = new FormData();
+        formData.append('profile_picture', fileInput.files[0]);
+        
+        try {
+            const response = await fetch('/upload_profile_picture', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showMessage(data.message, 'success');
+                
+                // Update profile picture display
+                const currentAvatar = document.getElementById('currentAvatar');
+                const profileInitial = document.getElementById('profileInitial');
+                const profileImage = document.getElementById('profileImage');
+                
+                if (profileInitial) {
+                    profileInitial.remove();
+                }
+                
+                if (profileImage) {
+                    profileImage.src = data.image_url + '?t=' + new Date().getTime();
+                } else {
+                    currentAvatar.innerHTML = `<img src="${data.image_url}?t=${new Date().getTime()}" alt="Profile" class="w-full h-full object-cover rounded-full" id="profileImage">`;
+                }
+                
+                // Show remove button if it doesn't exist
+                if (!document.getElementById('removeProfileBtn')) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.id = 'removeProfileBtn';
+                    removeBtn.className = 'bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors';
+                    removeBtn.innerHTML = '<i class="fas fa-trash mr-2"></i>Remove';
+                    removeBtn.addEventListener('click', removeProfilePicture);
+                    
+                    uploadBtn.parentElement.appendChild(removeBtn);
+                }
+                
+                // Clear file input
+                fileInput.value = '';
+                
+            } else {
+                showMessage(data.message, 'error');
+            }
+        } catch (error) {
+            showMessage('Upload failed. Please try again.', 'error');
+            console.error('Upload error:', error);
+        } finally {
+            // Reset button state
+            uploadBtn.disabled = false;
+            btnText.textContent = 'Upload Picture';
+            spinner.classList.add('hidden');
+        }
+    });
+    
+    // Remove profile picture
+    async function removeProfilePicture() {
+        // In a real implementation, you'd call an API endpoint to remove the picture
+        const currentAvatar = document.getElementById('currentAvatar');
+        const profileImage = document.getElementById('profileImage');
+        const removeBtn = document.getElementById('removeProfileBtn');
+        
+        // Show confirmation
+        if (!confirm('Are you sure you want to remove your profile picture?')) {
+            return;
+        }
+        
+        // Simulate removal - in real app, call API
+        if (profileImage) {
+            profileImage.remove();
+        }
+        
+        currentAvatar.innerHTML = `<span id="profileInitial">{{ user.username[0].upper() }}</span>`;
+        
+        // Hide remove button
+        if (removeBtn) {
+            removeBtn.remove();
+        }
+        
+        showMessage('Profile picture removed successfully.', 'success');
+        
+        // In real implementation, you'd call:
+        // await fetch('/remove_profile_picture', { method: 'POST' });
+    }
+    
+    // Attach remove function if remove button exists
+    const removeBtn = document.getElementById('removeProfileBtn');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', removeProfilePicture);
+    }
+    
+    // Show message function
+    function showMessage(message, type) {
+        const messageDiv = document.getElementById('uploadMessage');
+        messageDiv.className = `mt-4 p-4 rounded-lg ${
+            type === 'success' ? 'bg-green-500/20 border border-green-500 text-green-400' : 
+            'bg-red-500/20 border border-red-500 text-red-400'
+        }`;
+        messageDiv.textContent = message;
+        messageDiv.classList.remove('hidden');
+        
+        // Auto-hide success messages after 5 seconds
+        if (type === 'success') {
+            setTimeout(() => {
+                messageDiv.classList.add('hidden');
+            }, 5000);
+        }
+    }
+    
+    // Preview image before upload (bonus feature)
+    document.getElementById('profilePictureInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // You could add a preview feature here
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    </script>
+</body>
+</html>

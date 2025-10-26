@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="admin-users">
+    <h2>User Management</h2>
+    
+    <div class="users-list">
+        {% for user in users %}
+        <div class="user-card {% if user.is_banned %}banned{% endif %}">
+            <div class="user-info">
+                <h4>{{ user.username }}</h4>
+                <p>Joined: {{ user.created_at.strftime('%Y-%m-%d') }}</p>
+                <p>Warnings: {{ user.warnings }}</p>
+                <p>Status: {% if user.is_banned %}🚫 Banned{% else %}✅ Active{% endif %}</p>
+            </div>
+            <div class="user-actions">
+                {% if not user.is_banned %}
+                <form action="{{ url_for('ban_user', user_id=user.id) }}" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Ban</button>
+                </form>
+                {% else %}
+                <form action="{{ url_for('unban_user', user_id=user.id) }}" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-success">Unban</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.user-card {
+    background: white;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: between;
+    align-items: center;
+}
+
+.user-card.banned {
+    background: #ffe6e6;
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-actions {
+    margin-left: 1rem;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+</style>
+{% endblock %}

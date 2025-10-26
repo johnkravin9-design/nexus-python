@@ -1,0 +1,503 @@
+{% extends "layout.html" %}
+
+{% block title %}Messages - Nexus{% endblock %}
+
+{% block extra_css %}
+<style>
+    .messages-container {
+        height: calc(100vh - 200px);
+        background: white;
+        border-radius: 15px;
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+    .conversations-sidebar {
+        border-right: 1px solid var(--gray-200);
+        height: 100%;
+        overflow-y: auto;
+    }
+    .chat-area {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .messages-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        background: var(--gray-50);
+    }
+    .message-input-container {
+        border-top: 1px solid var(--gray-200);
+        background: white;
+        padding: 20px;
+    }
+    .conversation-item {
+        transition: all 0.3s ease;
+        border: none;
+        border-radius: 10px;
+        margin-bottom: 8px;
+    }
+    .conversation-item:hover, .conversation-item.active {
+        background: var(--primary);
+        color: white;
+    }
+    .conversation-item:hover .text-muted,
+    .conversation-item.active .text-muted {
+        color: rgba(255,255,255,0.8) !important;
+    }
+    .unread-badge {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+    }
+    .typing-indicator {
+        color: var(--primary);
+        font-style: italic;
+    }
+    .message-time {
+        font-size: 0.75rem;
+        opacity: 0.7;
+    }
+    .online-indicator {
+        width: 8px;
+        height: 8px;
+        background: var(--success);
+        border-radius: 50%;
+        border: 2px solid white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="fw-bold">Messages</h1>
+                    <p class="text-muted">Chat with your friends and connections</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary-modern btn-modern">
+                        <i class="fas fa-edit me-2"></i>New Message
+                    </button>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-inbox me-2"></i>Archive All</a></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-bell-slash me-2"></i>Mute Notifications</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Message Settings</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="messages-container">
+                <div class="row h-100">
+                    <!-- Conversations Sidebar -->
+                    <div class="col-md-4 col-lg-3 conversations-sidebar">
+                        <!-- Search -->
+                        <div class="p-3 border-bottom">
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-0">
+                                    <i class="fas fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-0 bg-light" placeholder="Search messages...">
+                            </div>
+                        </div>
+
+                        <!-- Conversations List -->
+                        <div class="p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0">Conversations</h6>
+                                <span class="badge bg-primary rounded-pill" id="total-conversations">0</span>
+                            </div>
+                            
+                            <div id="conversations-list">
+                                <!-- Conversations will be loaded here -->
+                                <div class="text-center py-5">
+                                    <i class="fas fa-comments fa-2x text-muted mb-3"></i>
+                                    <p class="text-muted">No conversations yet</p>
+                                    <button class="btn btn-primary btn-sm">Start a conversation</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Area -->
+                    <div class="col-md-8 col-lg-9">
+                        <div class="chat-area">
+                            <!-- Chat Header -->
+                            <div class="chat-header border-bottom p-3 bg-white">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center">
+                                        <div class="user-avatar user-avatar-sm me-3">
+                                            <span id="current-chat-avatar">U</span>
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold mb-0" id="current-chat-user">Select a conversation</h6>
+                                            <small class="text-muted" id="current-chat-status">Click on a conversation to start chatting</small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-light btn-sm" id="video-call-btn" disabled>
+                                            <i class="fas fa-video"></i>
+                                        </button>
+                                        <button class="btn btn-light btn-sm" id="voice-call-btn" disabled>
+                                            <i class="fas fa-phone"></i>
+                                        </button>
+                                        <div class="dropdown">
+                                            <button class="btn btn-light btn-sm" data-bs-toggle="dropdown">
+                                                <i class="fas fa-ellipsis-h"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>View Profile</a></li>
+                                                <li><a class="dropdown-item" href="#"><i class="fas fa-bell-slash me-2"></i>Mute</a></li>
+                                                <li><a class="dropdown-item" href="#"><i class="fas fa-archive me-2"></i>Archive</a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item text-danger" href="#"><i class="fas fa-trash me-2"></i>Delete Chat</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Messages List -->
+                            <div class="messages-list" id="messages-list">
+                                <div class="text-center py-5">
+                                    <i class="fas fa-comments fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">No conversation selected</h5>
+                                    <p class="text-muted">Choose a conversation from the sidebar to start messaging</p>
+                                </div>
+                            </div>
+
+                            <!-- Typing Indicator -->
+                            <div class="typing-indicators px-4 py-2" id="typing-indicators" style="display: none;">
+                                <div class="typing-indicator">
+                                    <i class="fas fa-circle fa-xs me-1"></i>
+                                    <i class="fas fa-circle fa-xs me-1"></i>
+                                    <i class="fas fa-circle fa-xs me-1"></i>
+                                    <span id="typing-user">Someone</span> is typing...
+                                </div>
+                            </div>
+
+                            <!-- Message Input -->
+                            <div class="message-input-container">
+                                <div class="d-flex align-items-center gap-2">
+                                    <button class="btn btn-light" id="attach-btn">
+                                        <i class="fas fa-paperclip"></i>
+                                    </button>
+                                    <button class="btn btn-light" id="emoji-btn">
+                                        <i class="fas fa-smile"></i>
+                                    </button>
+                                    <div class="flex-grow-1">
+                                        <input type="text" class="form-control" id="message-input" 
+                                               placeholder="Type a message..." disabled>
+                                    </div>
+                                    <button class="btn btn-primary" id="send-btn" disabled>
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                </div>
+                                
+                                <!-- File Upload (Hidden) -->
+                                <input type="file" id="file-input" multiple style="display: none;" 
+                                       accept="image/*, video/*, .pdf, .doc, .docx, .txt">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Message Modal -->
+<div class="modal fade" id="newMessageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">New Message</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">To:</label>
+                    <input type="text" class="form-control" placeholder="Search users...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Message:</label>
+                    <textarea class="form-control" rows="3" placeholder="Type your message..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary">Send Message</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+    const socket = io();
+    let currentChatId = null;
+    let typingTimer;
+    const TYPING_TIMEOUT = 1000;
+
+    // Load conversations
+    async function loadConversations() {
+        try {
+            const response = await fetch('/api/chats');
+            const conversations = await response.json();
+            displayConversations(conversations);
+        } catch (error) {
+            console.error('Error loading conversations:', error);
+        }
+    }
+
+    // Display conversations
+    function displayConversations(conversations) {
+        const container = document.getElementById('conversations-list');
+        const totalElement = document.getElementById('total-conversations');
+        
+        if (conversations.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-comments fa-2x text-muted mb-3"></i>
+                    <p class="text-muted">No conversations yet</p>
+                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newMessageModal">
+                        Start a conversation
+                    </button>
+                </div>
+            `;
+            totalElement.textContent = '0';
+            return;
+        }
+
+        totalElement.textContent = conversations.length;
+        
+        container.innerHTML = conversations.map(conv => `
+            <div class="conversation-item p-3 ${currentChatId === conv.id ? 'active' : ''}" 
+                 onclick="openChat(${conv.id}, ${conv.other_user_id}, '${conv.other_user_name}')">
+                <div class="d-flex align-items-center">
+                    <div class="position-relative me-3">
+                        <div class="user-avatar user-avatar-sm">
+                            ${conv.other_user_name[0].toUpperCase()}
+                        </div>
+                        ${conv.online ? '<div class="online-indicator position-absolute bottom-0 end-0"></div>' : ''}
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h6 class="fw-bold mb-1">${conv.other_user_name}</h6>
+                            <small class="text-muted message-time">${formatTime(conv.last_message_time)}</small>
+                        </div>
+                        <p class="text-muted small mb-0 text-truncate" style="max-width: 200px;">
+                            ${conv.last_message}
+                        </p>
+                    </div>
+                    ${conv.unread_count > 0 ? `
+                    <div class="unread-badge ms-2">
+                        ${conv.unread_count}
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Open chat
+    function openChat(chatId, userId, username) {
+        currentChatId = chatId;
+        
+        // Update UI
+        document.getElementById('current-chat-avatar').textContent = username[0].toUpperCase();
+        document.getElementById('current-chat-user').textContent = username;
+        document.getElementById('current-chat-status').textContent = 'Online';
+        document.getElementById('message-input').disabled = false;
+        document.getElementById('send-btn').disabled = false;
+        document.getElementById('video-call-btn').disabled = false;
+        document.getElementById('voice-call-btn').disabled = false;
+        
+        // Join chat room
+        socket.emit('join_chat', { chat_id: chatId });
+        
+        // Load messages
+        loadMessages(chatId);
+        
+        // Mark as read
+        markAsRead(chatId);
+        
+        // Update conversations list
+        loadConversations();
+    }
+
+    // Load messages for a chat
+    async function loadMessages(chatId) {
+        try {
+            const response = await fetch(`/api/chats/${chatId}/messages`);
+            const messages = await response.json();
+            displayMessages(messages);
+        } catch (error) {
+            console.error('Error loading messages:', error);
+        }
+    }
+
+    // Display messages
+    function displayMessages(messages) {
+        const container = document.getElementById('messages-list');
+        
+        if (messages.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-comment-dots fa-2x text-muted mb-3"></i>
+                    <p class="text-muted">No messages yet</p>
+                    <p class="text-muted small">Send a message to start the conversation!</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = messages.map(msg => `
+            <div class="message-bubble ${msg.sender_id === {{ session['user_id'] }} ? 'message-sent' : 'message-received'}">
+                <div class="message-content">${msg.content}</div>
+                <div class="message-time text-end mt-1">
+                    ${formatTime(msg.timestamp)}
+                    ${msg.is_read && msg.sender_id === {{ session['user_id'] }} ? ' <i class="fas fa-check-double text-info"></i>' : ''}
+                </div>
+            </div>
+        `).join('');
+        
+        // Scroll to bottom
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // Send message
+    function sendMessage() {
+        const input = document.getElementById('message-input');
+        const content = input.value.trim();
+        
+        if (content && currentChatId) {
+            socket.emit('send_message', {
+                content: content,
+                chat_id: currentChatId
+            });
+            input.value = '';
+            
+            // Stop typing indicator
+            socket.emit('typing_stop', { chat_id: currentChatId });
+            clearTimeout(typingTimer);
+        }
+    }
+
+    // Mark messages as read
+    async function markAsRead(chatId) {
+        try {
+            await fetch(`/api/chats/${chatId}/read`, { method: 'POST' });
+            socket.emit('mark_messages_read', { chat_id: chatId });
+        } catch (error) {
+            console.error('Error marking as read:', error);
+        }
+    }
+
+    // Format time
+    function formatTime(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Socket event listeners
+    socket.on('new_message', function(data) {
+        if (parseInt(data.chat_id) === parseInt(currentChatId)) {
+            // Add message to chat
+            const container = document.getElementById('messages-list');
+            const messageHtml = `
+                <div class="message-bubble ${data.sender_id === {{ session['user_id'] }} ? 'message-sent' : 'message-received'}">
+                    <div class="message-content">${data.content}</div>
+                    <div class="message-time text-end mt-1">
+                        ${formatTime(data.timestamp)}
+                        ${data.is_read && data.sender_id === {{ session['user_id'] }} ? ' <i class="fas fa-check-double text-info"></i>' : ''}
+                    </div>
+                </div>
+            `;
+            container.innerHTML += messageHtml;
+            container.scrollTop = container.scrollHeight;
+            
+            // Mark as read if it's not our message
+            if (data.sender_id !== {{ session['user_id'] }}) {
+                markAsRead(currentChatId);
+            }
+        }
+        
+        // Update conversations list
+        loadConversations();
+    });
+
+    // Typing indicators
+    socket.on('user_typing', function(data) {
+        if (parseInt(data.chat_id) === parseInt(currentChatId)) {
+            const indicator = document.getElementById('typing-indicators');
+            document.getElementById('typing-user').textContent = data.username;
+            indicator.style.display = 'block';
+        }
+    });
+
+    socket.on('user_stopped_typing', function(data) {
+        if (parseInt(data.chat_id) === parseInt(currentChatId)) {
+            document.getElementById('typing-indicators').style.display = 'none';
+        }
+    });
+
+    // Typing detection
+    document.getElementById('message-input').addEventListener('input', function() {
+        if (currentChatId) {
+            socket.emit('typing_start', { chat_id: currentChatId });
+            clearTimeout(typingTimer);
+            typingTimer = setTimeout(() => {
+                socket.emit('typing_stop', { chat_id: currentChatId });
+            }, TYPING_TIMEOUT);
+        }
+    });
+
+    // Send message on Enter key
+    document.getElementById('message-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    // Send button click
+    document.getElementById('send-btn').addEventListener('click', sendMessage);
+
+    // File attachment
+    document.getElementById('attach-btn').addEventListener('click', function() {
+        document.getElementById('file-input').click();
+    });
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        loadConversations();
+        
+        // New message modal
+        document.querySelector('[data-bs-target="#newMessageModal"]')?.addEventListener('click', function() {
+            // In a real app, you would load users here
+        });
+    });
+</script>
+{% endblock %}

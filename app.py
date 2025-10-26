@@ -1,0 +1,953 @@
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from functools import wraps
+from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+import os
+from PIL import Image
+from werkzeug.utils import secure_filename
+
+# === FIX: DECORATORS DEFINED FIRST ===
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        
+        user = User.query.get(session['user_id'])
+        if not user or not hasattr(user, 'role') or user.role != 'admin':
+            flash('Admin access required', 'error')
+            return redirect(url_for('dashboard'))
+        
+        return f(*args, **kwargs)
+    return decorated_function
+# === END DECORATORS ===
+
+try:
+    from video_utils import save_video_file, VideoProcessor, save_video_file_fallback
+    VIDEO_SUPPORT = True
+except ImportError:
+    VIDEO_SUPPORT = False
+    print("Video support disabled - required dependencies not installed")
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'nexus-master-key-2024'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///nexus_master.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+app.config['PROFILE_PICTURE_SIZE'] = (200, 200)
+app.config['POST_IMAGE_SIZE'] = (800, 600)
+
+db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Database Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128))
+    profile_picture = db.Column(db.String(200))
+    bio = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    role = db.Column(db.String(20), default='user')
+
+class Chat(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_message_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class ChatParticipant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    chat_id = db.Column(db.Integer, db.ForeignKey('chat.id'), nullable=False)
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    chat_id = db.Column(db.Integer, db.ForeignKey('chat.id'), nullable=False)
+    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    read_at = db.Column(db.DateTime, nullable=True)
+    is_read = db.Column(db.Boolean, default=False)
+    message_type = db.Column(db.String(20), default='text')
+    file_path = db.Column(db.String(255), nullable=True)
+    filename = db.Column(db.String(255), nullable=True)
+    file_size = db.Column(db.Integer, nullable=True)
+    chat = db.relationship('Chat', backref=db.backref('messages', lazy=True))
+    sender = db.relationship('User', backref=db.backref('sent_messages', lazy=True))
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    image_url = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    video_url = db.Column(db.String(200))
+    video_thumbnail = db.Column(db.String(200))
+    video_duration = db.Column(db.Integer)
+    media_type = db.Column(db.String(20), default='text')
+    user = db.relationship('User', backref=db.backref('posts', lazy=True))
+
+class Like(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Connection(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    follower_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    following_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('comments', lazy=True))
+    post = db.relationship('Post', backref=db.backref('comments', lazy=True))
+
+# Setup relationships
+User.chats = db.relationship('Chat', secondary='chat_participant', backref=db.backref('participants', lazy=True))
+
+# Utility Functions
+def allowed_file(filename):
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx', 'txt', 'mp4', 'mp3', 'zip', 'webp'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_file_type(filename):
+    if not filename:
+        return 'text'
+
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    image_ext = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+    video_ext = {'mp4', 'mov', 'avi'}
+    audio_ext = {'mp3', 'wav', 'ogg'}
+
+    if ext in image_ext:
+        return 'image'
+    elif ext in video_ext:
+        return 'video'
+    elif ext in audio_ext:
+        return 'audio'
+    elif ext in {'pdf', 'doc', 'docx', 'txt', 'zip'}:
+        return 'file'
+    else:
+        return 'text'
+
+def save_profile_picture(file, username):
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_ext = filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{username}_{int(datetime.utcnow().timestamp())}.jpg"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'profile_pictures', unique_filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+        image = Image.open(file)
+        image = image.convert('RGB')
+        image.thumbnail(app.config['PROFILE_PICTURE_SIZE'], Image.Resampling.LANCZOS)
+        image.save(filepath, 'JPEG', quality=85)
+
+        static_path = os.path.join('static', 'uploads', 'profile_pictures', unique_filename)
+        os.makedirs(os.path.dirname(static_path), exist_ok=True)
+        image.save(static_path, 'JPEG', quality=85)
+
+        return f"uploads/profile_pictures/{unique_filename}"
+    return None
+
+# Notification System
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    type = db.Column(db.String(20), default='info')
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('notifications', lazy=True))
+
+# Add this after your database models
+with app.app_context():
+    db.create_all()
+
+# Notification Routes
+@app.route('/api/notifications')
+@login_required
+def get_notifications():
+    notifications = Notification.query.filter_by(user_id=session['user_id'])\
+        .order_by(Notification.created_at.desc())\
+        .limit(10)\
+        .all()
+
+    unread_count = Notification.query.filter_by(user_id=session['user_id'], is_read=False).count()
+
+    return jsonify({
+        'notifications': [{
+            'id': n.id,
+            'title': n.title,
+            'message': n.message,
+            'type': n.type,
+            'is_read': n.is_read,
+            'created_at': n.created_at.isoformat(),
+            'time_ago': get_time_ago(n.created_at)
+        } for n in notifications],
+        'unread_count': unread_count
+    })
+
+@app.route('/api/notifications/read/<int:notification_id>', methods=['POST'])
+@login_required
+def mark_notification_read(notification_id):
+    notification = Notification.query.filter_by(id=notification_id, user_id=session['user_id']).first()
+    if notification:
+        notification.is_read = True
+        db.session.commit()
+
+    return jsonify({'success': True})
+
+@app.route('/api/notifications/read_all', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    Notification.query.filter_by(user_id=session['user_id'], is_read=False).update({'is_read': True})
+    db.session.commit()
+
+    return jsonify({'success': True})
+
+# Helper function for time ago
+def get_time_ago(dt):
+    now = datetime.utcnow()
+    diff = now - dt
+
+    if diff.days > 365:
+        return f"{diff.days // 365}y ago"
+    elif diff.days > 30:
+        return f"{diff.days // 30}mo ago"
+    elif diff.days > 0:
+        return f"{diff.days}d ago"
+    elif diff.seconds > 3600:
+        return f"{diff.seconds // 3600}h ago"
+    elif diff.seconds > 60:
+        return f"{diff.seconds // 60}m ago"
+    else:
+        return "Just now"
+
+# SocketIO for real-time notifications
+@socketio.on('connect')
+def handle_connect():
+    user_id = session.get('user_id')
+    if user_id:
+        join_room(f'user_{user_id}')
+        print(f"User {user_id} connected for notifications")
+
+def send_notification(user_id, title, message, type='info'):
+    """Send notification to a specific user"""
+    notification = Notification(
+        user_id=user_id,
+        title=title,
+        message=message,
+        type=type
+    )
+    db.session.add(notification)
+    db.session.commit()
+
+    # Send via SocketIO
+    socketio.emit('new_notification', {
+        'id': notification.id,
+        'title': title,
+        'message': message,
+        'type': type,
+        'time_ago': get_time_ago(notification.created_at)
+    }, room=f'user_{user_id}')
+
+# Admin notification routes
+@app.route('/admin/send_notification', methods=['POST'])
+@admin_required
+def admin_send_notification():
+    user_id = request.json.get('user_id')
+    title = request.json.get('title')
+    message = request.json.get('message')
+    type = request.json.get('type', 'info')
+
+    if user_id == 'all':
+        # Send to all users
+        users = User.query.all()
+        for user in users:
+            send_notification(user.id, title, message, type)
+    else:
+        send_notification(user_id, title, message, type)
+
+    return jsonify({'success': True})
+
+@app.route('/admin/test_notification', methods=['POST'])
+@admin_required
+def admin_test_notification():
+    send_notification(session['user_id'], 'Test Notification', 'This is a test notification from the admin panel.', 'info')
+    return jsonify({'success': True})
+
+# Authentication Routes - FIXED VERSION
+@app.route('/')
+def index():
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        # Use get() method to avoid KeyError
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not username or not password:
+            flash('Please fill in all fields', 'error')
+            return render_template('login.html')
+
+        user = User.query.filter_by(username=username).first()
+
+        if user and check_password_hash(user.password_hash, password):
+            session['user_id'] = user.id
+            session['username'] = user.username
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid credentials', 'error')
+
+    return render_template('login.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        # Use get() method to avoid KeyError
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not username or not email or not password:
+            flash('Please fill in all fields', 'error')
+            return render_template('signup.html')
+
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists', 'error')
+            return render_template('signup.html')
+
+        if User.query.filter_by(email=email).first():
+            flash('Email already exists', 'error')
+            return render_template('signup.html')
+
+        hashed_password = generate_password_hash(password)
+        new_user = User(username=username, email=email, password_hash=hashed_password)
+
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash('Account created successfully! Please login.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('signup.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('login'))
+
+# Main App Routes
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    user = User.query.get(session['user_id'])
+    posts = Post.query.join(User).order_by(Post.created_at.desc()).all()
+    return render_template('dashboard.html', user=user, posts=posts)
+
+@app.route('/feed')
+@login_required
+def feed():
+    user = User.query.get(session['user_id'])
+    
+    # Get all posts with their users and comments, ordered by newest first
+    posts = Post.query.options(
+        db.joinedload(Post.user),
+        db.joinedload(Post.comments).joinedload(Comment.user)
+    ).order_by(Post.created_at.desc()).all()
+    
+    # Get posts the current user has liked
+    user_likes = Like.query.filter_by(user_id=user.id).all()
+    user_liked_posts = [like.post_id for like in user_likes]
+    
+    return render_template('feed.html', 
+                         user=user, 
+                         posts=posts, 
+                         user_liked_posts=user_liked_posts)
+    
+@app.route('/profile')
+@login_required
+def profile():
+    user = User.query.get(session['user_id'])
+    return render_template('profile.html', user=user)
+
+@app.route('/create_post', methods=['GET', 'POST'])
+@login_required
+def create_post():
+    if request.method == 'POST':
+        content = request.form.get('content', '').strip()
+        image = request.files.get('image')
+        video = request.files.get('video')
+
+        if not content and not image and not video:
+            flash('Please add some content, image, or video to your post', 'error')
+            return render_template('create_post.html')
+
+        new_post = Post(content=content, user_id=session['user_id'])
+
+        # Handle image upload
+        if image and allowed_file(image.filename):
+            filename = secure_filename(image.filename)
+            unique_filename = f"post_{session['user_id']}_{int(datetime.utcnow().timestamp())}.jpg"
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'posts', unique_filename)
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+            img = Image.open(image)
+            img = img.convert('RGB')
+            img.thumbnail(app.config['POST_IMAGE_SIZE'], Image.Resampling.LANCZOS)
+            img.save(filepath, 'JPEG', quality=85)
+
+            new_post.image_url = f"uploads/posts/{unique_filename}"
+            new_post.media_type = 'image'
+
+        # Handle video upload
+        elif video and VIDEO_SUPPORT and VideoProcessor.allowed_video_file(video.filename):
+            try:
+                result = save_video_file(video, session['username'], app)
+                if not result['success']:
+                    # Fallback to simple video saving
+                    result = save_video_file_fallback(video, session['username'], app)
+            except Exception as e:
+                print(f"Video processing error: {e}")
+                result = save_video_file_fallback(video, session['username'], app)
+
+            if result['success']:
+                new_post.video_url = result['video_url']
+                new_post.video_thumbnail = result['thumbnail_url']
+                new_post.video_duration = result['duration']
+                new_post.media_type = 'video'
+            else:
+                flash('Error processing video file', 'error')
+                return render_template('create_post.html')
+        elif video and not VIDEO_SUPPORT:
+            flash('Video upload is currently not supported on this server', 'error')
+            return render_template('create_post.html')
+
+        else:
+            new_post.media_type = 'text'
+
+        db.session.add(new_post)
+        db.session.commit()
+        flash('Post created successfully!', 'success')
+        return redirect(url_for('feed'))
+
+    return render_template('create_post.html')
+
+@app.route('/discover')
+@login_required
+def discover():
+    users = User.query.filter(User.id != session['user_id']).all()
+    return render_template('discover.html', users=users)
+
+@app.route('/search')
+@login_required
+def search():
+    query = request.args.get('q', '')
+    if query:
+        users = User.query.filter(User.username.contains(query) | User.email.contains(query)).all()
+    else:
+        users = []
+    return render_template('search.html', users=users, query=query)
+
+@app.route('/api/search/users')
+@login_required
+def api_search_users():
+    query = request.args.get('q', '')
+    users = User.query.filter(User.username.contains(query)).limit(10).all()
+    return jsonify([{'id': user.id, 'username': user.username} for user in users])
+
+# Messaging Routes
+@app.route('/messages')
+@login_required
+def messages():
+    user = User.query.get(session['user_id'])
+    chats = user.chats
+    return render_template('messages.html', user=user, chats=chats)
+
+@app.route('/chat/<int:user_id>')
+@login_required
+def chat(user_id):
+    current_user_id = session['user_id']
+    other_user = User.query.get(user_id)
+
+    # Find or create chat
+    chat = Chat.query.join(ChatParticipant).filter(
+        ChatParticipant.user_id.in_([current_user_id, user_id])
+    ).group_by(Chat.id).having(db.func.count(ChatParticipant.user_id) == 2).first()
+
+    if not chat:
+        chat = Chat()
+        db.session.add(chat)
+        db.session.flush()
+
+        participant1 = ChatParticipant(user_id=current_user_id, chat_id=chat.id)
+        participant2 = ChatParticipant(user_id=user_id, chat_id=chat.id)
+        db.session.add_all([participant1, participant2])
+        db.session.commit()
+
+    return render_template('chat.html', chat=chat, other_user=other_user)
+
+@app.route('/api/chats')
+@login_required
+def get_chats():
+    user_id = session['user_id']
+    chats = Chat.query.join(ChatParticipant).filter(ChatParticipant.user_id == user_id).all()
+
+    chats_data = []
+    for chat in chats:
+        other_participant = ChatParticipant.query.filter(
+            ChatParticipant.chat_id == chat.id,
+            ChatParticipant.user_id != user_id
+        ).first()
+
+        if other_participant:
+            other_user = User.query.get(other_participant.user_id)
+            last_message = Message.query.filter_by(chat_id=chat.id).order_by(Message.created_at.desc()).first()
+
+            unread_count = Message.query.filter_by(
+                chat_id=chat.id,
+                is_read=False
+            ).filter(Message.sender_id != user_id).count()
+
+            chats_data.append({
+                'id': chat.id,
+                'other_user_id': other_user.id,
+                'other_user_name': other_user.username,
+                'last_message': last_message.content if last_message else 'No messages yet',
+                'last_message_time': last_message.created_at.isoformat() if last_message else None,
+                'unread_count': unread_count
+            })
+
+    return jsonify(chats_data)
+
+@app.route('/api/chats/<int:chat_id>/messages')
+@login_required
+def get_chat_messages(chat_id):
+    user_id = session['user_id']
+    if not user_id:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    messages = Message.query.filter_by(chat_id=chat_id)\
+        .order_by(Message.created_at.asc())\
+        .all()
+
+    messages_data = []
+    for msg in messages:
+        messages_data.append({
+            'id': msg.id,
+            'content': msg.content,
+            'sender_id': msg.sender_id,
+            'sender_name': msg.sender.username,
+            'timestamp': msg.created_at.isoformat(),
+            'file_path': msg.file_path,
+            'message_type': msg.message_type,
+            'filename': msg.filename,
+            'is_read': msg.is_read,
+            'read_at': msg.read_at.isoformat() if msg.read_at else None
+        })
+
+    return jsonify(messages_data)
+
+@app.route('/api/chats/<int:chat_id>/read', methods=['POST'])
+@login_required
+def mark_chat_read_api(chat_id):
+    user_id = session['user_id']
+    if not user_id:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    # Mark messages as read
+    unread_messages = Message.query.filter_by(
+        chat_id=chat_id,
+        is_read=False
+    ).filter(Message.sender_id != user_id).all()
+
+    read_time = datetime.utcnow()
+    for message in unread_messages:
+        message.is_read = True
+        message.read_at = read_time
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'read_count': len(unread_messages),
+        'read_at': read_time.isoformat()
+    })
+
+@app.route('/upload_file', methods=['POST'])
+@login_required
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file selected'}), 400
+
+    file = request.files['file']
+    chat_id = request.form.get('chat_id')
+    user_id = session.get('user_id')
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    if not user_id:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    # Create upload directory if it doesn't exist
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        # Create unique filename
+        unique_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{user_id}_{filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(file_path)
+
+        # Determine message type
+        file_extension = filename.rsplit('.', 1)[1].lower()
+        if file_extension in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
+            message_type = 'image'
+            content = f"📷 Image: {filename}"
+        else:
+            message_type = 'file'
+            content = f"📎 File: {filename}"
+
+        # Save message to database
+        message = Message(
+            content=content,
+            sender_id=user_id,
+            chat_id=chat_id,
+            file_path=unique_filename,
+            message_type=message_type,
+            filename=filename,
+            file_size=os.path.getsize(file_path)
+        )
+        db.session.add(message)
+        db.session.commit()
+
+        # Emit via SocketIO
+        socketio.emit('new_message', {
+            'id': message.id,
+            'content': message.content,
+            'sender_id': message.sender_id,
+            'sender_name': User.query.get(user_id).username,
+            'chat_id': message.chat_id,
+            'timestamp': message.created_at.isoformat(),
+            'file_path': message.file_path,
+            'message_type': message.message_type,
+            'filename': filename,
+            'is_read': False
+        }, room=str(chat_id))
+
+        return jsonify({
+            'success': True,
+            'file_path': unique_filename,
+            'message_id': message.id
+        })
+
+    return jsonify({'error': 'File type not allowed'}), 400
+
+# Social Features
+@app.route('/follow/<int:user_id>', methods=['POST'])
+@login_required
+def follow_user(user_id):
+    current_user_id = session['user_id']
+
+    if current_user_id == user_id:
+        return jsonify({'error': 'Cannot follow yourself'}), 400
+
+    existing_connection = Connection.query.filter_by(
+        follower_id=current_user_id,
+        following_id=user_id
+    ).first()
+
+    if not existing_connection:
+        new_connection = Connection(follower_id=current_user_id, following_id=user_id)
+        db.session.add(new_connection)
+        db.session.commit()
+        return jsonify({'status': 'followed'})
+    else:
+        db.session.delete(existing_connection)
+        db.session.commit()
+        return jsonify({'status': 'unfollowed'})
+
+@app.route('/like/<int:post_id>', methods=['POST'])
+@login_required
+def like_post(post_id):
+    user_id = session['user_id']
+
+    existing_like = Like.query.filter_by(user_id=user_id, post_id=post_id).first()
+
+    if not existing_like:
+        new_like = Like(user_id=user_id, post_id=post_id)
+        db.session.add(new_like)
+        db.session.commit()
+        return jsonify({'status': 'liked', 'count': Like.query.filter_by(post_id=post_id).count()})
+    else:
+        db.session.delete(existing_like)
+        db.session.commit()
+        return jsonify({'status': 'unliked', 'count': Like.query.filter_by(post_id=post_id).count()})
+
+@app.route('/comment/<int:post_id>', methods=['POST'])
+@login_required
+def add_comment(post_id):
+    content = request.form.get('content')
+    user_id = session['user_id']
+    
+    if not content or content.strip() == '':
+        return jsonify({'success': False, 'error': 'Comment cannot be empty'})
+    
+    new_comment = Comment(
+        content=content.strip(),
+        user_id=user_id,
+        post_id=post_id
+    )
+    
+    db.session.add(new_comment)
+    db.session.commit()
+    
+    # Get the comment with user data for response
+    comment_with_user = Comment.query.options(db.joinedload(Comment.user)).get(new_comment.id)
+    
+    return jsonify({
+        'success': True, 
+        'comment': {
+            'id': new_comment.id,
+            'content': new_comment.content,
+            'username': comment_with_user.user.username,
+            'created_at': new_comment.created_at.strftime('%I:%M %p')
+        }
+    })
+
+# Admin Panel Routes
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    # Statistics
+    total_users = User.query.count()
+    total_posts = Post.query.count()
+    total_messages = Message.query.count()
+    recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+
+    return render_template('admin/dashboard.html',
+                         total_users=total_users,
+                         total_posts=total_posts,
+                         total_messages=total_messages,
+                         recent_users=recent_users)
+
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    users = User.query.order_by(User.created_at.desc()).all()
+    return render_template('admin/users.html', users=users)
+
+@app.route('/admin/posts')
+@admin_required
+def admin_posts():
+    posts = Post.query.join(User).order_by(Post.created_at.desc()).all()
+    return render_template('admin/posts.html', posts=posts)
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+@admin_required
+def admin_delete_user(user_id):
+    if user_id == session['user_id']:
+        flash('Cannot delete your own account', 'error')
+        return redirect(url_for('admin_users'))
+
+    user = User.query.get_or_404(user_id)
+
+    # Delete user's posts, messages, etc.
+    Post.query.filter_by(user_id=user_id).delete()
+    Message.query.filter_by(sender_id=user_id).delete()
+
+    db.session.delete(user)
+    db.session.commit()
+
+    flash(f'User {user.username} deleted successfully', 'success')
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/delete_post/<int:post_id>', methods=['POST'])
+@admin_required
+def admin_delete_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    db.session.delete(post)
+    db.session.commit()
+
+    flash('Post deleted successfully', 'success')
+    return redirect(url_for('admin_posts'))
+
+@app.route('/admin/toggle_user/<int:user_id>', methods=['POST'])
+@admin_required
+def admin_toggle_user(user_id):
+    user = User.query.get_or_404(user_id)
+    user.role = 'admin' if user.role == 'user' else 'user'
+    db.session.commit()
+
+    flash(f'User {user.username} role updated to {user.role}', 'success')
+    return redirect(url_for('admin_users'))
+
+# SocketIO Event Handlers
+@socketio.on('connect')
+def handle_connect():
+    user_id = session.get('user_id')
+    if user_id:
+        print(f"User {user_id} connected to chat")
+        emit('connected', {'user_id': user_id})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    user_id = session.get('user_id')
+    if user_id:
+        print(f"User {user_id} disconnected")
+
+@socketio.on('join_chat')
+def handle_join_chat(data):
+    chat_id = data['chat_id']
+    join_room(str(chat_id))
+    print(f"User {session.get('user_id')} joined chat {chat_id}")
+
+@socketio.on('send_message')
+def handle_send_message(data):
+    chat_id = data['chat_id']
+    content = data['content']
+    user_id = session.get('user_id')
+
+    if user_id and content.strip():
+        message = Message(
+            content=content.strip(),
+            sender_id=user_id,
+            chat_id=chat_id,
+            message_type='text'
+        )
+        db.session.add(message)
+        db.session.commit()
+
+        # Update chat's last message time
+        chat = Chat.query.get(chat_id)
+        chat.last_message_at = datetime.utcnow()
+        db.session.commit()
+
+        emit('new_message', {
+            'id': message.id,
+            'content': message.content,
+            'sender_id': message.sender_id,
+            'sender_name': User.query.get(user_id).username,
+            'chat_id': message.chat_id,
+            'timestamp': message.created_at.isoformat(),
+            'is_read': False,
+            'message_type': 'text'
+        }, room=str(chat_id))
+
+# Enhanced Messaging SocketIO Handlers
+@socketio.on('typing_start')
+def handle_typing_start(data):
+    chat_id = data['chat_id']
+    user_id = session.get('user_id')
+    user = User.query.get(user_id)
+
+    if user:
+        emit('user_typing', {
+            'user_id': user_id,
+            'username': user.username,
+            'chat_id': chat_id
+        }, room=str(chat_id), include_self=False)
+        print(f"User {user.username} is typing in chat {chat_id}")
+
+@socketio.on('typing_stop')
+def handle_typing_stop(data):
+    chat_id = data['chat_id']
+    user_id = session.get('user_id')
+
+    emit('user_stopped_typing', {
+        'user_id': user_id,
+        'chat_id': chat_id
+    }, room=str(chat_id), include_self=False)
+    print(f"User {user_id} stopped typing in chat {chat_id}")
+
+@socketio.on('mark_messages_read')
+def handle_mark_read(data):
+    chat_id = data['chat_id']
+    user_id = session.get('user_id')
+
+    # Mark all unread messages in this chat as read
+    unread_messages = Message.query.filter_by(
+        chat_id=chat_id,
+        is_read=False
+    ).filter(Message.sender_id != user_id).all()
+
+    read_time = datetime.utcnow()
+    for message in unread_messages:
+        message.is_read = True
+        message.read_at = read_time
+
+    db.session.commit()
+
+    # Notify other users that messages were read
+    emit('messages_read', {
+        'chat_id': chat_id,
+        'reader_id': user_id,
+        'reader_name': User.query.get(user_id).username,
+        'timestamp': read_time.isoformat(),
+        'message_ids': [msg.id for msg in unread_messages]
+    }, room=str(chat_id))
+    print(f"User {user_id} marked messages as read in chat {chat_id}")
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    socketio.run(app, debug=True, host='0.0.0.0')
+
+@app.route('/api/notifications/recent')
+def recent_notifications():
+    if 'user_id' not in session:
+        return jsonify([])
+    
+    notifications = Notification.query.filter_by(
+        user_id=session['user_id']
+    ).order_by(Notification.created_at.desc()).limit(10).all()
+    
+    return jsonify([{
+        'id': n.id,
+        'title': n.title,
+        'message': n.message,
+        'type': n.notification_type,
+        'is_read': n.is_read,
+        'time': n.created_at.strftime('%H:%M')
+    } for n in notifications])
+
+@app.route('/notifications/read-all', methods=['POST'])
+def mark_all_read():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    Notification.query.filter_by(
+        user_id=session['user_id'],
+        is_read=False
+    ).update({'is_read': True})
+    
+    db.session.commit()
+    return jsonify({'success': True})

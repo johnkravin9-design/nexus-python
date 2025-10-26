@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search - Nexus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/dashboard" class="text-2xl font-bold text-indigo-400">🌐 Nexus</a>
+                    <div class="ml-8 flex space-x-4">
+                        <a href="/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md">Dashboard</a>
+                        <a href="/feed" class="text-gray-300 hover:text-white px-3 py-2 rounded-md">Feed</a>
+                        <a href="/search" class="bg-gray-900 text-white px-3 py-2 rounded-md">Search</a>
+                        <a href="/profile" class="text-gray-300 hover:text-white px-3 py-2 rounded-md">Profile</a>
+                        <a href="/messages" class="text-gray-300 hover:text-white px-3 py-2 rounded-md">Messages</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/logout" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto mt-8 p-6">
+        <!-- Search Header -->
+        <div class="bg-gray-800 rounded-2xl p-8 border border-gray-700 mb-6">
+            <h1 class="text-3xl font-bold mb-2">Search Nexus</h1>
+            <p class="text-gray-400 mb-6">Find users, posts, and communities</p>
+            
+            <!-- Search Bar -->
+            <div class="relative">
+                <form method="GET" action="/search" class="flex space-x-4">
+                    <div class="flex-1 relative">
+                        <input
+                            type="text"
+                            name="q"
+                            value="{{ query }}"
+                            placeholder="Search for users..."
+                            class="w-full px-4 py-4 bg-gray-900 border border-gray-700 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 text-lg"
+                            id="searchInput"
+                        >
+                        <button type="submit" class="absolute right-3 top-3 text-gray-400 hover:text-white">
+                            <i class="fas fa-search text-xl"></i>
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Quick Search Suggestions -->
+                <div class="flex space-x-2 mt-4">
+                    <a href="/search?q=developer" class="bg-gray-700 text-gray-300 px-3 py-1 rounded-full text-sm hover:bg-gray-600 transition-colors">
+                        #developer
+                    </a>
+                    <a href="/search?q=designer" class="bg-gray-700 text-gray-300 px-3 py-1 rounded-full text-sm hover:bg-gray-600 transition-colors">
+                        #designer
+                    </a>
+                    <a href="/search?q=photography" class="bg-gray-700 text-gray-300 px-3 py-1 rounded-full text-sm hover:bg-gray-600 transition-colors">
+                        #photography
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div id="searchResults">
+            {% if query %}
+                {% if users %}
+                <div class="mb-6">
+                    <h2 class="text-xl font-semibold mb-4">Users ({{ users|length }} found)</h2>
+                    <div class="space-y-4">
+                        {% for user in users %}
+                        <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 hover:border-gray-600 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-4">
+                                    <a href="/profile/{{ user.username }}" class="flex items-center space-x-4 hover:opacity-80 transition-opacity">
+                                        {% if user.profile_picture and user.profile_picture != 'default.png' %}
+                                        <div class="w-16 h-16 rounded-full overflow-hidden">
+                                            <img src="{{ user.get_profile_picture_url() }}" alt="Profile" class="w-full h-full object-cover">
+                                        </div>
+                                        {% else %}
+                                        <div class="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+                                            {{ user.username[0].upper() }}
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <div>
+                                            <div class="font-semibold text-lg">
+                                                {% if user.full_name %}
+                                                    {{ user.full_name }}
+                                                {% else %}
+                                                    {{ user.username }}
+                                                {% endif %}
+                                            </div>
+                                            <div class="text-gray-400">@{{ user.username }}</div>
+                                            {% if user.bio %}
+                                            <p class="text-gray-300 text-sm mt-1 max-w-md">{{ user.bio[:100] }}{% if user.bio|length > 100 %}...{% endif %}</p>
+                                            {% endif %}
+                                        </div>
+                                    </a>
+                                </div>
+                                
+                                <div class="flex space-x-2">
+                                    {% if user.id != session.user_id %}
+                                        {% set is_following = Connection.query.filter_by(follower_id=session.user_id, following_id=user.id).first() is not none %}
+                                        {% if is_following %}
+                                        <button 
+                                            onclick="unfollowUser({{ user.id }})"
+                                            class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                                            id="followBtn-{{ user.id }}"
+                                        >
+                                            <i class="fas fa-user-check mr-1"></i>Following
+                                        </button>
+                                        {% else %}
+                                        <button 
+                                            onclick="followUser({{ user.id }})"
+                                            class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                                            id="followBtn-{{ user.id }}"
+                                        >
+                                            <i class="fas fa-user-plus mr-1"></i>Follow
+                                        </button>
+                                        {% endif %}
+                                        
+                                        <a href="/chat/{{ user.id }}" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                                            <i class="fas fa-comment mr-1"></i>Message
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-12">
+                    <i class="fas fa-search text-6xl text-gray-600 mb-4"></i>
+                    <h3 class="text-xl font-semibold mb-2">No users found</h3>
+                    <p class="text-gray-400">Try searching with different keywords</p>
+                </div>
+                {% endif %}
+            {% else %}
+            <!-- Empty State -->
+            <div class="text-center py-12">
+                <i class="fas fa-search text-6xl text-gray-600 mb-4"></i>
+                <h3 class="text-xl font-semibold mb-2">Start Searching</h3>
+                <p class="text-gray-400">Enter a username, name, or interest to find people</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+    // Real-time search functionality
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+    
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            return;
+        }
+        
+        searchTimeout = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/search/users?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displaySearchResults(data.users, query);
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+            }
+        }, 300);
+    });
+    
+    function displaySearchResults(users, query) {
+        if (users.length === 0) {
+            searchResults.innerHTML = `
+                <div class="text-center py-12">
+                    <i class="fas fa-search text-6xl text-gray-600 mb-4"></i>
+                    <h3 class="text-xl font-semibold mb-2">No users found for "${query}"</h3>
+                    <p class="text-gray-400">Try different keywords</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = `
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold mb-4">Users (${users.length} found)</h2>
+                <div class="space-y-4">
+        `;
+        
+        users.forEach(user => {
+            html += `
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 hover:border-gray-600 transition-colors">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <a href="/profile/${user.username}" class="flex items-center space-x-4 hover:opacity-80 transition-opacity">
+                                ${user.profile_picture_url && user.profile_picture_url !== '/static/uploads/profile_pictures/default.png' ? 
+                                    `<div class="w-16 h-16 rounded-full overflow-hidden">
+                                        <img src="${user.profile_picture_url}" alt="Profile" class="w-full h-full object-cover">
+                                    </div>` :
+                                    `<div class="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+                                        ${user.username[0].toUpperCase()}
+                                    </div>`
+                                }
+                                
+                                <div>
+                                    <div class="font-semibold text-lg">
+                                        ${user.full_name}
+                                    </div>
+                                    <div class="text-gray-400">@${user.username}</div>
+                                    ${user.bio ? `<p class="text-gray-300 text-sm mt-1 max-w-md">${user.bio.substring(0, 100)}${user.bio.length > 100 ? '...' : ''}</p>` : ''}
+                                </div>
+                            </a>
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            ${user.is_following ? 
+                                `<button onclick="unfollowUser(${user.id})" class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm" id="followBtn-${user.id}">
+                                    <i class="fas fa-user-check mr-1"></i>Following
+                                </button>` :
+                                `<button onclick="followUser(${user.id})" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm" id="followBtn-${user.id}">
+                                    <i class="fas fa-user-plus mr-1"></i>Follow
+                                </button>`
+                            }
+                            
+                            <a href="/chat/${user.id}" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                                <i class="fas fa-comment mr-1"></i>Message
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+        
+        searchResults.innerHTML = html;
+    }
+    
+    // Follow/Unfollow functions
+    async function followUser(userId) {
+        const btn = document.getElementById(`followBtn-${userId}`);
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Following...';
+        btn.disabled = true;
+        
+        try {
+            const response = await fetch(`/follow/${userId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                btn.innerHTML = '<i class="fas fa-user-check mr-1"></i>Following';
+                btn.className = 'bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm';
+                btn.onclick = () => unfollowUser(userId);
+            } else {
+                alert(data.message);
+                btn.innerHTML = originalText;
+            }
+        } catch (error) {
+            alert('Error following user');
+            btn.innerHTML = originalText;
+        }
+        
+        btn.disabled = false;
+    }
+    
+    async function unfollowUser(userId) {
+        const btn = document.getElementById(`followBtn-${userId}`);
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Unfollowing...';
+        btn.disabled = true;
+        
+        try {
+            const response = await fetch(`/unfollow/${userId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                btn.innerHTML = '<i class="fas fa-user-plus mr-1"></i>Follow';
+                btn.className = 'bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm';
+                btn.onclick = () => followUser(userId);
+            } else {
+                alert(data.message);
+                btn.innerHTML = originalText;
+            }
+        } catch (error) {
+            alert('Error unfollowing user');
+            btn.innerHTML = originalText;
+        }
+        
+        btn.disabled = false;
+    }
+    
+    // Focus search input on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        searchInput.focus();
+    });
+    </script>
+</body>
+</html>

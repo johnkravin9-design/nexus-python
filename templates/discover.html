@@ -1,0 +1,254 @@
+{% extends "layout.html" %}
+
+{% block title %}Discover - Nexus{% endblock %}
+
+{% block extra_css %}
+<style>
+    .discover-card {
+        transition: all 0.3s ease;
+        border: none;
+        overflow: hidden;
+    }
+    .discover-card:hover {
+        transform: translateY(-5px);
+    }
+    .user-card {
+        position: relative;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    .user-cover {
+        height: 80px;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+    }
+    .user-stats {
+        background: rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 10px;
+        padding: 10px;
+    }
+    .category-badge {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="fw-bold">Discover People</h1>
+                    <p class="text-muted">Connect with amazing people around the world</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <div class="dropdown">
+                        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-filter me-2"></i>Filter
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#">Recently Active</a></li>
+                            <li><a class="dropdown-item" href="#">Most Followers</a></li>
+                            <li><a class="dropdown-item" href="#">Nearby</a></li>
+                            <li><a class="dropdown-item" href="#">Similar Interests</a></li>
+                        </ul>
+                    </div>
+                    <div class="input-group" style="width: 300px;">
+                        <input type="text" class="form-control" placeholder="Search people...">
+                        <button class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex flex-wrap gap-2">
+                {% for category in ['All', 'Technology', 'Art', 'Music', 'Sports', 'Travel', 'Food', 'Gaming', 'Business'] %}
+                <button class="btn {% if category == 'All' %}btn-primary{% else %}btn-outline-primary{% endif %} btn-sm">
+                    {{ category }}
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Grid -->
+    <div class="row g-4">
+        {% for user in users %}
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card user-card discover-card">
+                <div class="user-cover"></div>
+                <div class="card-body text-center" style="margin-top: -40px;">
+                    <!-- User Avatar -->
+                    <div class="user-avatar user-avatar-lg mx-auto mb-3 border-4 border-white shadow">
+                        {{ user.username[0].upper() }}
+                    </div>
+                    
+                    <!-- User Info -->
+                    <h5 class="fw-bold mb-1">{{ user.username }}</h5>
+                    <p class="text-muted small mb-2">@{{ user.username }}</p>
+                    
+                    {% if user.bio %}
+                    <p class="small text-muted mb-3">{{ user.bio[:100] }}{% if user.bio|length > 100 %}...{% endif %}</p>
+                    {% endif %}
+                    
+                    <!-- User Stats -->
+                    <div class="user-stats d-flex justify-content-around mb-3">
+                        <div class="text-center">
+                            <div class="fw-bold">1.2K</div>
+                            <div class="text-muted small">Followers</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="fw-bold">456</div>
+                            <div class="text-muted small">Following</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="fw-bold">127</div>
+                            <div class="text-muted small">Posts</div>
+                        </div>
+                    </div>
+
+                    <!-- Mutual Connections -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-center align-items-center mb-2">
+                            <div class="d-flex" style="margin-right: -8px;">
+                                {% for i in range(3) %}
+                                <div class="user-avatar user-avatar-sm border-2 border-white" 
+                                     style="margin-left: -8px; background: linear-gradient(45deg, #{{ ['48cae4','52b788','ffafcc'][i] }}, #{{ ['0077b6','40916c','fb6f92'][i] }});">
+                                    {{ "MNO"[i] }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <small class="text-muted ms-2">12 mutual friends</small>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary-modern btn-sm follow-btn" data-user-id="{{ user.id }}">
+                            <i class="fas fa-user-plus me-1"></i>Follow
+                        </button>
+                        <a href="{{ url_for('chat', user_id=user.id) }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-comment me-1"></i>Message
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="col-12">
+            <div class="card-modern p-5 text-center">
+                <div class="mb-4">
+                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">No users to discover</h4>
+                    <p class="text-muted">Check back later for new users to connect with!</p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Load More -->
+    {% if users %}
+    <div class="text-center mt-5">
+        <button class="btn btn-primary-modern btn-modern" id="loadMoreUsers">
+            <i class="fas fa-sync-alt me-2"></i>Load More People
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Featured Communities Section -->
+<div class="bg-light py-5 mt-5">
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-12 text-center">
+                <h2 class="fw-bold">Featured Communities</h2>
+                <p class="text-muted">Join communities that match your interests</p>
+            </div>
+        </div>
+        <div class="row g-4">
+            {% for community in [
+                {'name': 'Tech Enthusiasts', 'members': '45.2K', 'icon': 'fas fa-laptop-code', 'color': 'primary'},
+                {'name': 'Photography Lovers', 'members': '32.7K', 'icon': 'fas fa-camera', 'color': 'success'},
+                {'name': 'Travel Explorers', 'members': '28.9K', 'icon': 'fas fa-globe-americas', 'color': 'info'},
+                {'name': 'Food & Cooking', 'members': '51.3K', 'icon': 'fas fa-utensils', 'color': 'warning'},
+                {'name': 'Fitness & Health', 'members': '38.6K', 'icon': 'fas fa-dumbbell', 'color': 'danger'},
+                {'name': 'Art & Design', 'members': '27.1K', 'icon': 'fas fa-palette', 'color': 'secondary'}
+            ] %}
+            <div class="col-lg-4 col-md-6">
+                <div class="card card-modern p-4 text-center h-100">
+                    <div class="mb-3">
+                        <i class="{{ community.icon }} fa-2x text-{{ community.color }}"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">{{ community.name }}</h5>
+                    <p class="text-muted small mb-3">{{ community.members }} members</p>
+                    <button class="btn btn-outline-{{ community.color }} btn-sm w-100">
+                        <i class="fas fa-plus me-1"></i>Join Community
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Follow functionality
+    document.querySelectorAll('.follow-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            const userId = this.dataset.userId;
+            const originalText = this.innerHTML;
+            
+            try {
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Following...';
+                
+                const response = await fetch(`/follow/${userId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const result = await response.json();
+                
+                if (result.status === 'followed') {
+                    this.innerHTML = '<i class="fas fa-check me-1"></i>Following';
+                    this.classList.remove('btn-primary-modern');
+                    this.classList.add('btn-success');
+                } else {
+                    this.innerHTML = '<i class="fas fa-user-plus me-1"></i>Follow';
+                    this.classList.remove('btn-success');
+                    this.classList.add('btn-primary-modern');
+                }
+            } catch (error) {
+                console.error('Error following user:', error);
+                this.innerHTML = originalText;
+            }
+        });
+    });
+
+    // Load more users
+    document.getElementById('loadMoreUsers')?.addEventListener('click', function() {
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+        // Simulate loading
+        setTimeout(() => {
+            this.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Load More People';
+            // In a real app, you would fetch more users here
+        }, 1500);
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,504 @@
+{% extends "layout.html" %}
+
+{% block title %}Feed - Nexus{% endblock %}
+
+{% block extra_css %}
+<style>
+    .story-item {
+        flex: 0 0 auto;
+        width: 100px;
+        text-align: center;
+    }
+    .story-avatar {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24, #ff9ff3, #f368e0);
+        padding: 3px;
+        margin: 0 auto 8px;
+    }
+    .story-avatar-inner {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: #333;
+    }
+    .trending-badge {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <!-- Main Feed -->
+        <div class="col-lg-6 col-md-8">
+            <!-- Stories Section -->
+            <div class="card-modern p-3 mb-4">
+                <div class="d-flex overflow-auto gap-3 pb-2">
+                    <!-- Create Story -->
+                    <div class="story-item">
+                        <div class="story-avatar">
+                            <div class="story-avatar-inner">
+                                <i class="fas fa-plus text-primary"></i>
+                            </div>
+                        </div>
+                        <small class="text-muted">Add Story</small>
+                    </div>
+                    
+                    <!-- Sample Stories -->
+                    {% for i in range(7) %}
+                    <div class="story-item">
+                        <div class="story-avatar" style="background: linear-gradient(45deg, #{{ ['48cae4','52b788','ffafcc','ffd166','ef476f','118ab2','06d6a0'][i] }}, #{{ ['0077b6','40916c','fb6f92','ff9e00','ff0054','03045e','0db39e'][i] }});">
+                            <div class="story-avatar-inner">
+                                {{ "ABCDEFG"[i] }}
+                            </div>
+                        </div>
+                        <small class="text-muted">User{{ i+1 }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Feed Posts -->
+            {% for post in posts %}
+            <div class="card-modern p-4 mb-4 animate-fadeIn">
+                <!-- Post Header -->
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar user-avatar-sm me-3">
+                            {{ post.user.username[0].upper() }}
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-0">{{ post.user.username }}</h6>
+                            <small class="text-muted">{{ post.created_at.strftime('%b %d at %I:%M %p') }}</small>
+                        </div>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-bookmark me-2"></i>Save Post</a></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-share me-2"></i>Share</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="#"><i class="fas fa-flag me-2"></i>Report</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Post Content -->
+                <p class="mb-3 fs-6">{{ post.content }}</p>
+
+                {% if post.image_url %}
+                <div class="post-image mb-3">
+                    <img src="{{ url_for('static', filename=post.image_url) }}" 
+                         class="img-fluid rounded-3 w-100" 
+                         style="max-height: 500px; object-fit: cover;" 
+                         alt="Post image"
+                         onclick="openImageModal(this.src)">
+                </div>
+                {% endif %}
+
+                <!-- Video Duration (FIXED LINE) -->
+                {% if post.video_duration %}
+                <div class="mb-3">
+                    <small class="text-muted">
+                        Duration: {{ "%02d:%02d"|format((post.video_duration // 60), (post.video_duration % 60)) }}
+                    </small>
+                </div>
+                {% endif %}
+
+                <!-- Post Engagement -->
+                <div class="d-flex justify-content-between text-muted small mb-3">
+                    <div>
+                        <i class="fas fa-heart text-danger me-1"></i>
+                        <span>{{ post.likes|length if post.likes else 0 }}</span>
+                        <span class="ms-2">
+                            <i class="fas fa-comment me-1"></i>
+                            {{ post.comments|length if post.comments else 0 }}
+                        </span>
+                    </div>
+                    <div>
+                        <span>{{ post.shares|length if post.shares else 0 }} shares</span>
+                    </div>
+                </div>
+
+                <!-- Post Actions -->
+                <div class="border-top border-bottom py-2">
+                    <div class="row text-center">
+                        <div class="col">
+                            <button class="btn btn-light btn-sm w-100 like-btn {% if post.id in user_liked_posts %}active{% endif %}" 
+                                    data-post-id="{{ post.id }}">
+                                <i class="{% if post.id in user_liked_posts %}fas text-danger{% else %}far{% endif %} fa-heart me-1"></i>
+                                <span>{% if post.id in user_liked_posts %}Liked{% else %}Like{% endif %}</span>
+                            </button>
+                        </div>
+                        <div class="col">
+                            <button class="btn btn-light btn-sm w-100 comment-btn" data-post-id="{{ post.id }}">
+                                <i class="far fa-comment me-1"></i>Comment
+                            </button>
+                        </div>
+                        <div class="col">
+                            <button class="btn btn-light btn-sm w-100 share-btn" data-post-id="{{ post.id }}">
+                                <i class="far fa-share-square me-1"></i>Share
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comments Preview -->
+                {% if post.comments %}
+                <div class="mt-3">
+                    {% for comment in post.comments[:2] %}
+                    <div class="d-flex align-items-start mb-2">
+                        <div class="user-avatar user-avatar-sm me-2">
+                            {{ comment.user.username[0].upper() }}
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="bg-light rounded-3 p-2">
+                                <strong class="small">{{ comment.user.username }}</strong>
+                                <p class="small mb-0">{{ comment.content }}</p>
+                            </div>
+                            <div class="small text-muted mt-1">
+                                <span class="me-2">{{ comment.created_at.strftime('%I:%M %p') }}</span>
+                                <button class="btn btn-link btn-sm p-0 text-muted small">Like</button>
+                                <button class="btn btn-link btn-sm p-0 text-muted small ms-2">Reply</button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    {% if post.comments|length > 2 %}
+                    <button class="btn btn-link btn-sm p-0 text-muted small">
+                        View all {{ post.comments|length }} comments
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Add Comment -->
+                <div class="mt-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-sm" placeholder="Write a comment...">
+                        <button class="btn btn-primary btn-sm">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Empty Feed State -->
+            <div class="card-modern p-5 text-center">
+                <div class="mb-4">
+                    <i class="fas fa-rss fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">Your feed is empty</h4>
+                    <p class="text-muted">Follow more people to see their posts here!</p>
+                </div>
+                <a href="{{ url_for('discover') }}" class="btn btn-primary-modern btn-modern">
+                    <i class="fas fa-compass me-2"></i>Discover People
+                </a>
+            </div>
+            {% endfor %}
+
+            <!-- Load More -->
+            {% if posts %}
+            <div class="text-center mt-4">
+                <button class="btn btn-outline-primary btn-modern" id="loadMore">
+                    <i class="fas fa-sync-alt me-2"></i>Load More Posts
+                </button>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-lg-3 d-none d-lg-block">
+            <!-- Trending Now -->
+            <div class="card-modern p-3 mb-4 sticky-top" style="top: 80px;">
+                <h6 class="fw-bold mb-3">
+                    <i class="fas fa-fire text-warning me-2"></i>Trending Now
+                </h6>
+                <div class="d-flex flex-column gap-2">
+                    {% for trend in [
+                        {'title': 'Artificial Intelligence', 'posts': '15.2K'},
+                        {'title': 'Space Exploration', 'posts': '8.7K'},
+                        {'title': 'Sustainable Tech', 'posts': '12.4K'},
+                        {'title': 'Web Development', 'posts': '23.1K'},
+                        {'title': 'Mobile Gaming', 'posts': '9.8K'}
+                    ] %}
+                    <a href="#" class="text-decoration-none text-dark">
+                        <div class="d-flex align-items-center p-2 rounded hover-bg">
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold small">#{{ trend.title }}</div>
+                                <small class="text-muted">{{ trend.posts }} posts</small>
+                            </div>
+                            <span class="trending-badge">Trending</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Online Friends -->
+            <div class="card-modern p-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0">Online Friends</h6>
+                    <span class="badge bg-success">{{ range(1, 8)|random }}</span>
+                </div>
+                <div class="d-flex flex-column gap-2">
+                    {% for i in range(5) %}
+                    <div class="d-flex align-items-center">
+                        <div class="position-relative me-2">
+                            <div class="user-avatar user-avatar-sm">
+                                {{ "FGHIJ"[i] }}
+                            </div>
+                            <div class="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
+                                 style="width: 10px; height: 10px;"></div>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small">Friend{{ i+1 }}</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm">
+                            <i class="fas fa-comment"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div class="modal fade" id="imageModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0 text-center">
+                <img src="" id="modalImage" class="img-fluid" style="max-height: 80vh;">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Image modal
+    function openImageModal(src) {
+        document.getElementById('modalImage').src = src;
+        new bootstrap.Modal(document.getElementById('imageModal')).show();
+    }
+
+    // Comment functionality
+    document.querySelectorAll('.comment-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const postId = this.dataset.postId;
+            const card = this.closest('.card-modern');
+            const commentInput = card.querySelector('input[type="text"]');
+            commentInput.focus();
+        });
+    });
+
+    // Handle comment submission
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.card-modern').forEach(card => {
+            const commentInput = card.querySelector('input[type="text"]');
+            const commentButton = card.querySelector('.input-group button');
+            
+            if (commentButton) {
+                commentButton.addEventListener('click', async function() {
+                    await submitComment(card, commentInput);
+                });
+            }
+            
+            // Allow pressing Enter to submit comment
+            if (commentInput) {
+                commentInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        submitComment(card, commentInput);
+                    }
+                });
+            }
+        });
+    });
+
+    async function submitComment(card, commentInput) {
+        const content = commentInput.value.trim();
+        const commentBtn = card.querySelector('.comment-btn');
+        if (!commentBtn) return;
+        
+        const postId = commentBtn.dataset.postId;
+        
+        if (!content) {
+            showFlashMessage('Please enter a comment', 'error');
+            return;
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('content', content);
+            
+            const response = await fetch(`/comment/${postId}`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Add new comment to the list
+                const commentsContainer = card.querySelector('.mt-3');
+                const newComment = document.createElement('div');
+                newComment.className = 'd-flex align-items-start mb-2';
+                newComment.innerHTML = `
+                    <div class="user-avatar user-avatar-sm me-2">
+                        ${result.comment.username[0].toUpperCase()}
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="bg-light rounded-3 p-2">
+                            <strong class="small">${result.comment.username}</strong>
+                            <p class="small mb-0">${result.comment.content}</p>
+                        </div>
+                        <div class="small text-muted mt-1">
+                            <span class="me-2">${result.comment.created_at}</span>
+                            <button class="btn btn-link btn-sm p-0 text-muted small">Like</button>
+                            <button class="btn btn-link btn-sm p-0 text-muted small ms-2">Reply</button>
+                        </div>
+                    </div>
+                `;
+                
+                // Insert new comment at the top of comments list
+                const existingComments = commentsContainer.querySelectorAll('.d-flex.align-items-start');
+                if (existingComments.length > 0) {
+                    commentsContainer.insertBefore(newComment, existingComments[0]);
+                } else {
+                    // Remove "no comments" message if it exists
+                    const noCommentsMsg = commentsContainer.querySelector('.text-muted');
+                    if (noCommentsMsg) {
+                        noCommentsMsg.remove();
+                    }
+                    commentsContainer.appendChild(newComment);
+                }
+                
+                // Clear input
+                commentInput.value = '';
+                
+                // Update comment count
+                const commentCountElement = card.querySelector('.fa-comment').parentElement;
+                const currentText = commentCountElement.textContent.trim();
+                const currentCount = parseInt(currentText) || 0;
+                commentCountElement.innerHTML = `<i class="fas fa-comment me-1"></i>${currentCount + 1}`;
+                
+                // Show success message
+                showFlashMessage('Comment posted successfully!', 'success');
+            } else {
+                showFlashMessage(result.error || 'Failed to post comment', 'error');
+            }
+        } catch (error) {
+            console.error('Error posting comment:', error);
+            showFlashMessage('Error posting comment', 'error');
+        }
+    }
+
+    function showFlashMessage(message, type) {
+        const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
+        const icon = type === 'error' ? 'exclamation-triangle' : 'check-circle';
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert ${alertClass} alert-dismissible fade show animate-fadeIn`;
+        alertDiv.setAttribute('role', 'alert');
+        alertDiv.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-${icon} me-2"></i>
+                ${message}
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        // Add to the flash messages container
+        const container = document.querySelector('.container.mt-3');
+        if (container) {
+            container.appendChild(alertDiv);
+        } else {
+            // Fallback to body
+            document.body.insertBefore(alertDiv, document.body.firstChild);
+        }
+        
+        // Auto remove after 3 seconds
+        setTimeout(() => {
+            if (alertDiv.parentElement) {
+                alertDiv.remove();
+            }
+        }, 3000);
+    }
+
+    // Enhanced like functionality
+    document.querySelectorAll('.like-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            const postId = this.dataset.postId;
+            const icon = this.querySelector('i');
+            const likeText = this.querySelector('span');
+            
+            this.disabled = true;
+            
+            try {
+                const response = await fetch(`/like/${postId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'liked') {
+                    icon.classList.remove('far');
+                    icon.classList.add('fas', 'text-danger');
+                    this.classList.add('active');
+                    likeText.textContent = 'Liked';
+                } else {
+                    icon.classList.remove('fas', 'text-danger');
+                    icon.classList.add('far');
+                    this.classList.remove('active');
+                    likeText.textContent = 'Like';
+                }
+                
+                // Update like count
+                const likeCountElement = this.closest('.card-modern').querySelector('.fa-heart').parentElement;
+                if (likeCountElement) {
+                    likeCountElement.innerHTML = `<i class="fas fa-heart text-danger me-1"></i>${result.count}`;
+                }
+                
+            } catch (error) {
+                console.error('Error liking post:', error);
+                showFlashMessage('Error liking post', 'error');
+            } finally {
+                this.disabled = false;
+            }
+        });
+    });
+
+    // Load more posts
+    document.getElementById('loadMore')?.addEventListener('click', function() {
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+        // Simulate loading
+        setTimeout(() => {
+            this.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Load More Posts';
+            // In a real app, you would fetch more posts here
+        }, 1000);
+    });
+</script>
+{% endblock %}

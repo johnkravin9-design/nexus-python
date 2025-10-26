@@ -1,0 +1,322 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ user.username }} - Profile - Nexus{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-cover {
+        height: 300px;
+        background: linear-gradient(45deg, #667eea, #764ba2, #f093fb, #f5576c);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+        border-radius: 15px 15px 0 0;
+        position: relative;
+    }
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    .profile-avatar {
+        width: 150px;
+        height: 150px;
+        border: 5px solid white;
+        border-radius: 50%;
+        position: absolute;
+        bottom: -75px;
+        left: 50px;
+        background: linear-gradient(45deg, #48cae4, #0077b6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        color: white;
+        font-weight: bold;
+    }
+    .stat-card {
+        background: white;
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: var(--shadow);
+        transition: all 0.3s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-lg);
+    }
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        background: linear-gradient(45deg, var(--primary), var(--secondary));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .tab-content {
+        background: white;
+        border-radius: 0 0 15px 15px;
+        box-shadow: var(--shadow);
+    }
+    .nav-tabs .nav-link {
+        border: none;
+        padding: 15px 25px;
+        font-weight: 600;
+        color: var(--gray-600);
+    }
+    .nav-tabs .nav-link.active {
+        background: transparent;
+        border-bottom: 3px solid var(--primary);
+        color: var(--primary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Profile Header -->
+<div class="container-fluid px-0">
+    <!-- Cover Photo -->
+    <div class="profile-cover">
+        <div class="profile-avatar">
+            {{ user.username[0].upper() }}
+        </div>
+        
+        <!-- Cover Actions -->
+        <div class="position-absolute top-0 end-0 m-4">
+            <div class="dropdown">
+                <button class="btn btn-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="fas fa-cog me-1"></i>Settings
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#"><i class="fas fa-camera me-2"></i>Update Cover</a></li>
+                    <li><a class="dropdown-item" href="#"><i class="fas fa-user-edit me-2"></i>Edit Profile</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#"><i class="fas fa-shield-alt me-2"></i>Privacy Settings</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Info -->
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-0" style="margin-top: 80px;">
+                    <div class="card-body pt-5">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h1 class="fw-bold mb-1">{{ user.username }}</h1>
+                                <p class="text-muted mb-2">@{{ user.username }}</p>
+                                
+                                {% if user.bio %}
+                                <p class="mb-3">{{ user.bio }}</p>
+                                {% else %}
+                                <p class="text-muted mb-3"><i>No bio yet</i></p>
+                                {% endif %}
+                                
+                                <div class="d-flex gap-3 text-muted small mb-3">
+                                    <div>
+                                        <i class="fas fa-map-marker-alt me-1"></i>
+                                        <span>New York, USA</span>
+                                    </div>
+                                    <div>
+                                        <i class="fas fa-briefcase me-1"></i>
+                                        <span>Software Developer</span>
+                                    </div>
+                                    <div>
+                                        <i class="fas fa-calendar me-1"></i>
+                                        <span>Joined {{ user.created_at.strftime('%B %Y') }}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-primary-modern btn-modern">
+                                        <i class="fas fa-edit me-2"></i>Edit Profile
+                                    </button>
+                                    <button class="btn btn-outline-primary btn-modern">
+                                        <i class="fas fa-share-alt me-2"></i>Share Profile
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="row g-3">
+                                    <div class="col-6 col-md-12">
+                                        <div class="stat-card">
+                                            <div class="stat-number">1.2K</div>
+                                            <div class="text-muted">Followers</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-12">
+                                        <div class="stat-card">
+                                            <div class="stat-number">856</div>
+                                            <div class="text-muted">Following</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Profile Content -->
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Navigation Tabs -->
+            <ul class="nav nav-tabs" id="profileTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="posts-tab" data-bs-toggle="tab" data-bs-target="#posts" type="button">
+                        <i class="fas fa-newspaper me-2"></i>Posts
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="photos-tab" data-bs-toggle="tab" data-bs-target="#photos" type="button">
+                        <i class="fas fa-image me-2"></i>Photos
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="friends-tab" data-bs-toggle="tab" data-bs-target="#friends" type="button">
+                        <i class="fas fa-users me-2"></i>Friends
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="about-tab" data-bs-toggle="tab" data-bs-target="#about" type="button">
+                        <i class="fas fa-info-circle me-2"></i>About
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content p-4" id="profileTabsContent">
+                <!-- Posts Tab -->
+                <div class="tab-pane fade show active" id="posts" role="tabpanel">
+                    <div class="row">
+                        {% for post in user.posts %}
+                        <div class="col-lg-6 mb-4">
+                            <div class="card card-modern">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="user-avatar user-avatar-sm me-3">
+                                            {{ user.username[0].upper() }}
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold mb-0">{{ user.username }}</h6>
+                                            <small class="text-muted">{{ post.created_at.strftime('%b %d, %Y') }}</small>
+                                        </div>
+                                    </div>
+                                    <p class="mb-3">{{ post.content }}</p>
+                                    {% if post.image_url %}
+                                    <img src="{{ url_for('static', filename=post.image_url) }}" 
+                                         class="img-fluid rounded-3 mb-3" 
+                                         style="max-height: 300px; object-fit: cover; width: 100%;"
+                                         alt="Post image">
+                                    {% endif %}
+                                    <div class="d-flex justify-content-between text-muted">
+                                        <div>
+                                            <i class="fas fa-heart text-danger me-1"></i>
+                                            <span>{{ post.likes|length if post.likes else 0 }}</span>
+                                        </div>
+                                        <div>
+                                            <span>{{ post.comments|length if post.comments else 0 }} comments</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="col-12 text-center py-5">
+                            <i class="fas fa-edit fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No posts yet</h5>
+                            <p class="text-muted">Share your first post with the world!</p>
+                            <a href="{{ url_for('create_post') }}" class="btn btn-primary-modern btn-modern">
+                                <i class="fas fa-edit me-2"></i>Create Post
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Photos Tab -->
+                <div class="tab-pane fade" id="photos" role="tabpanel">
+                    <div class="row g-3">
+                        {% for i in range(12) %}
+                        <div class="col-xl-3 col-lg-4 col-md-6">
+                            <div class="card border-0">
+                                <img src="https://picsum.photos/400/300?random={{ i }}" 
+                                     class="card-img-top rounded-3" 
+                                     style="height: 200px; object-fit: cover;"
+                                     alt="Photo {{ i+1 }}">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Friends Tab -->
+                <div class="tab-pane fade" id="friends" role="tabpanel">
+                    <div class="row g-3">
+                        {% for i in range(8) %}
+                        <div class="col-xl-3 col-lg-4 col-md-6">
+                            <div class="card card-modern text-center p-3">
+                                <div class="user-avatar user-avatar-lg mx-auto mb-3">
+                                    {{ "ABCDEFGH"[i] }}
+                                </div>
+                                <h6 class="fw-bold mb-1">Friend{{ i+1 }}</h6>
+                                <p class="text-muted small mb-3">12 mutual friends</p>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-primary btn-sm">
+                                        <i class="fas fa-user-check me-1"></i>Friends
+                                    </button>
+                                    <button class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-comment me-1"></i>Message
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- About Tab -->
+                <div class="tab-pane fade" id="about" role="tabpanel">
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <h6 class="fw-bold mb-3">Basic Information</h6>
+                            <div class="row mb-4">
+                                <div class="col-sm-4 text-muted">Birthday</div>
+                                <div class="col-sm-8">January 15, 1990</div>
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-sm-4 text-muted">Gender</div>
+                                <div class="col-sm-8">Male</div>
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-sm-4 text-muted">Languages</div>
+                                <div class="col-sm-8">English, Spanish</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <h6 class="fw-bold mb-3">Work & Education</h6>
+                            <div class="row mb-4">
+                                <div class="col-sm-4 text-muted">Occupation</div>
+                                <div class="col-sm-8">Software Developer at TechCorp</div>
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-sm-4 text-muted">Education</div>
+                                <div class="col-sm-8">Stanford University</div>
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-sm-4 text-muted">Skills</div>
+                                <div class="col-sm-8">Python, JavaScript, React, Node.js</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
